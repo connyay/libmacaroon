@@ -11,12 +11,27 @@ keywords = ["macaroon", "cookies", "authorization", "credentials"]
 categories = ["authentication", "cryptography"]
 license = "MIT"
 
+[features]
+default = ["sodiumoxide-backend"]
+sodiumoxide-backend = ["sodiumoxide"]
+wasm = ["rustcrypto-backend", "getrandom/js"]
+rustcrypto-backend = ["hmac", "sha2", "chacha20poly1305", "rand", "getrandom"]
+
 [dependencies]
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sodiumoxide = "0.2"
 base64 = "0.13"
+
+# SodiumOxide backend (default)
+sodiumoxide = { version = "0.2", optional = true }
+
+# RustCrypto backend (for WASM)
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+chacha20poly1305 = { version = "0.10", optional = true }
+rand = { version = "0.8", optional = true }
+getrandom = { version = "0.2", optional = true }
 
 [dev-dependencies]
 env_logger = "0.9"

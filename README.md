@@ -124,6 +124,43 @@ changelog and release notes. Once we have found an API that is sane and stable,
 we will release a 1.0, after which point, all versions of the 1.X line will be
 backwards compatible per [semver](https://semver.org).
 
+## WebAssembly (WASM) Support
+
+This crate now supports WebAssembly! Use the `wasm` feature to enable WASM compatibility:
+
+```toml
+[dependencies]
+macaroon = { version = "0.3", default-features = false, features = ["wasm"] }
+```
+
+The WASM feature uses the RustCrypto ecosystem instead of libsodium, providing:
+- Pure Rust implementation (no C dependencies)
+- Native WASM compilation support
+- Compatible cryptographic operations (HMAC-SHA256, XChaCha20Poly1305)
+
+### Building for WASM
+
+```bash
+# Build for WASM target
+cargo build --target wasm32-unknown-unknown --no-default-features --features wasm
+
+# Run tests with RustCrypto backend
+cargo test --no-default-features --features rustcrypto-backend
+```
+
+## Cryptographic Backends
+
+This crate supports two cryptographic backends:
+
+- **SodiumOxide** (default): Uses libsodium via sodiumoxide crate. Fast, well-tested, but requires C dependencies.
+- **RustCrypto** (for WASM): Uses pure Rust implementations. WASM-compatible but potentially slower.
+
+### Feature Flags
+
+- `default = ["sodiumoxide-backend"]` - Use sodiumoxide (libsodium)
+- `rustcrypto-backend` - Use RustCrypto ecosystem  
+- `wasm = ["rustcrypto-backend", "getrandom/js"]` - WASM-compatible build
+
 ## Minimum Supported Rust Version
 
 This crate supports Rust Language 2021 Edition and currently commits to working
