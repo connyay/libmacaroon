@@ -105,9 +105,6 @@ extern crate base64;
 extern crate serde;
 extern crate serde_json;
 
-#[cfg(feature = "sodiumoxide-backend")]
-extern crate sodiumoxide;
-
 mod caveat;
 mod crypto;
 mod error;
@@ -126,23 +123,12 @@ use std::fmt;
 
 pub type Result<T> = std::result::Result<T, MacaroonError>;
 
-/// Initializes the cryptographic libraries. Although you can use `macaroon` without
-/// calling this, the underlying random-number generator is not guaranteed to be thread-safe
-/// if you don't (when using sodiumoxide backend).
+/// Initializes the cryptographic libraries.
+///
+/// This is a no-op with the current pure-Rust backend but is retained
+/// for API compatibility. Safe to call, safe to skip.
 pub fn initialize() -> Result<()> {
-    #[cfg(feature = "sodiumoxide-backend")]
-    {
-        use crypto::sodiumoxide::SodiumOxideBackend;
-        use crypto::CryptoBackend;
-        SodiumOxideBackend::init()
-    }
-    
-    #[cfg(feature = "rustcrypto-backend")]
-    {
-        use crypto::rustcrypto::RustCryptoBackend;
-        use crypto::CryptoBackend;
-        RustCryptoBackend::init()
-    }
+    Ok(())
 }
 
 // An implementation that represents any binary data. By spec, most fields in a

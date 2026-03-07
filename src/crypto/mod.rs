@@ -1,50 +1,14 @@
-//! Cryptographic operations abstraction layer
+//! Cryptographic operations layer
 //!
-//! This module provides a trait-based abstraction over different cryptographic backends,
-//! allowing the macaroon crate to work with both SodiumOxide (default) and RustCrypto (WASM-compatible).
+//! Uses pure-Rust implementations from the RustCrypto ecosystem,
+//! compatible with native and WebAssembly targets.
+
+pub(crate) mod rustcrypto;
 
 use crate::Result;
+use rustcrypto::RustCryptoBackend;
 use std::borrow::Borrow;
 use std::ops::{Deref, DerefMut};
-
-// Backend implementations
-#[cfg(feature = "sodiumoxide-backend")]
-pub mod sodiumoxide;
-
-#[cfg(feature = "rustcrypto-backend")]
-pub mod rustcrypto;
-
-/// Cryptographic operations trait
-pub trait CryptoBackend {
-    /// Initialize the cryptographic backend
-    fn init() -> Result<()>;
-    
-    /// Generate HMAC using SHA-256
-    fn hmac<T, U>(key: &T, text: &U) -> MacaroonKey
-    where
-        T: AsRef<[u8; 32]> + ?Sized,
-        U: AsRef<[u8]> + ?Sized;
-        
-    /// Generate HMAC using SHA-256 with two inputs
-    fn hmac2<T, U>(key: &T, text1: &U, text2: &U) -> MacaroonKey
-    where
-        T: AsRef<[u8; 32]> + ?Sized,
-        U: AsRef<[u8]> + ?Sized;
-        
-    /// Encrypt key material using authenticated encryption
-    fn encrypt_key<T>(key: &T, plaintext: &T) -> Vec<u8>
-    where
-        T: AsRef<[u8; 32]> + ?Sized;
-        
-    /// Decrypt key material using authenticated encryption
-    fn decrypt_key<T, U>(key: &T, data: &U) -> Result<MacaroonKey>
-    where
-        T: AsRef<[u8; 32]> + ?Sized,
-        U: AsRef<[u8]> + ?Sized;
-        
-    /// Generate a random key
-    fn generate_random_key() -> MacaroonKey;
-}
 
 /// Secret cryptographic key used to sign and verify Macaroons.
 ///
@@ -135,12 +99,7 @@ impl MacaroonKey {
     /// let key = MacaroonKey::generate_random();
     /// ```
     pub fn generate_random() -> Self {
-        // Delegate to the active backend
-        #[cfg(feature = "sodiumoxide-backend")]
-        return sodiumoxide::SodiumOxideBackend::generate_random_key();
-        
-        #[cfg(feature = "rustcrypto-backend")]
-        return rustcrypto::RustCryptoBackend::generate_random_key();
+        RustCryptoBackend::generate_random_key()
     }
 
     /// Use some seed data to reproducibly generate a MacaroonKey via HMAC.
@@ -156,12 +115,12 @@ impl MacaroonKey {
     pub fn generate(seed: &[u8]) -> Self {
         generate_derived_key(seed)
     }
-    
+
     /// Convert to Vec<u8>
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
-    
+
     /// Check if key is empty (all zeros)
     pub fn is_empty(&self) -> bool {
         self.0.iter().all(|&b| b == 0)
@@ -180,11 +139,7 @@ where
     T: AsRef<[u8; 32]> + ?Sized,
     U: AsRef<[u8]> + ?Sized,
 {
-    #[cfg(feature = "sodiumoxide-backend")]
-    return sodiumoxide::SodiumOxideBackend::hmac(key, text);
-    
-    #[cfg(feature = "rustcrypto-backend")]
-    return rustcrypto::RustCryptoBackend::hmac(key, text);
+    RustCryptoBackend::hmac(key, text)
 }
 
 /// Generate HMAC using SHA-256 with two inputs
@@ -193,34 +148,22 @@ where
     T: AsRef<[u8; 32]> + ?Sized,
     U: AsRef<[u8]> + ?Sized,
 {
-    #[cfg(feature = "sodiumoxide-backend")]
-    return sodiumoxide::SodiumOxideBackend::hmac2(key, text1, text2);
-    
-    #[cfg(feature = "rustcrypto-backend")]
-    return rustcrypto::RustCryptoBackend::hmac2(key, text1, text2);
+    RustCryptoBackend::hmac2(key, text1, text2)
 }
 
-/// Encrypt key material using authenticated encryption
+/// Encrypt key material using authenticated encryption (XSalsa20-Poly1305)
 pub fn encrypt_key<T>(key: &T, plaintext: &T) -> Vec<u8>
 where
     T: AsRef<[u8; 32]> + ?Sized,
 {
-    #[cfg(feature = "sodiumoxide-backend")]
-    return sodiumoxide::SodiumOxideBackend::encrypt_key(key, plaintext);
-    
-    #[cfg(feature = "rustcrypto-backend")]
-    return rustcrypto::RustCryptoBackend::encrypt_key(key, plaintext);
+    RustCryptoBackend::encrypt_key(key, plaintext)
 }
 
-/// Decrypt key material using authenticated encryption
+/// Decrypt key material using authenticated encryption (XSalsa20-Poly1305)
 pub fn decrypt_key<T, U>(key: &T, data: &U) -> Result<MacaroonKey>
 where
     T: AsRef<[u8; 32]> + ?Sized,
     U: AsRef<[u8]> + ?Sized,
 {
-    #[cfg(feature = "sodiumoxide-backend")]
-    return sodiumoxide::SodiumOxideBackend::decrypt_key(key, data);
-    
-    #[cfg(feature = "rustcrypto-backend")]
-    return rustcrypto::RustCryptoBackend::decrypt_key(key, data);
+    RustCryptoBackend::decrypt_key(key, data)
 }

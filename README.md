@@ -142,24 +142,18 @@ The WASM feature uses the RustCrypto ecosystem instead of libsodium, providing:
 
 ```bash
 # Build for WASM target
-cargo build --target wasm32-unknown-unknown --no-default-features --features wasm
-
-# Run tests with RustCrypto backend
-cargo test --no-default-features --features rustcrypto-backend
+cargo build --target wasm32-unknown-unknown --features wasm
 ```
 
-## Cryptographic Backends
+## Cryptographic Backend
 
-This crate supports two cryptographic backends:
-
-- **SodiumOxide** (default): Uses libsodium via sodiumoxide crate. Fast, well-tested, but requires C dependencies.
-- **RustCrypto** (for WASM): Uses pure Rust implementations. WASM-compatible but potentially slower.
+This crate uses pure Rust implementations from the RustCrypto ecosystem
+(HMAC-SHA256, XSalsa20-Poly1305). No C dependencies are required, and the
+same backend works for both native and WASM targets.
 
 ### Feature Flags
 
-- `default = ["sodiumoxide-backend"]` - Use sodiumoxide (libsodium)
-- `rustcrypto-backend` - Use RustCrypto ecosystem  
-- `wasm = ["rustcrypto-backend", "getrandom/js"]` - WASM-compatible build
+- `wasm` - Enable WASM-compatible random number generation via `getrandom/js`
 
 ## Minimum Supported Rust Version
 

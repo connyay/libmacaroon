@@ -1,10 +1,10 @@
-//! Example demonstrating macaroon usage with WASM-compatible RustCrypto backend
-//! 
-//! To run this example with RustCrypto:
-//! cargo run --example wasm_example --no-default-features --features rustcrypto-backend
+//! Example demonstrating macaroon usage (works with both native and WASM targets)
+//!
+//! To run natively:
+//! cargo run --example wasm_example
 //!
 //! To build for WASM:
-//! cargo build --example wasm_example --target wasm32-unknown-unknown --no-default-features --features wasm
+//! cargo build --example wasm_example --target wasm32-unknown-unknown --features wasm
 
 use macaroon::{Macaroon, MacaroonKey, Verifier};
 
