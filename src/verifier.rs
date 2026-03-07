@@ -3,12 +3,21 @@ use crate::{ByteString, Caveat, Macaroon, MacaroonError, MacaroonKey, Result};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
+/// Function pointer type for general verifiers (retained for backwards compatibility).
 pub type VerifyFunc = fn(&ByteString) -> bool;
 
-#[derive(Default)]
 pub struct Verifier {
     exact: BTreeSet<ByteString>,
-    general: Vec<VerifyFunc>,
+    general: Vec<Box<dyn Fn(&ByteString) -> bool>>,
+}
+
+impl Default for Verifier {
+    fn default() -> Self {
+        Self {
+            exact: BTreeSet::new(),
+            general: Vec::new(),
+        }
+    }
 }
 
 impl Verifier {
@@ -76,17 +85,12 @@ impl Verifier {
         self.exact.insert(b);
     }
 
-    pub fn satisfy_general(&mut self, f: VerifyFunc) {
-        self.general.push(f)
+    pub fn satisfy_general<F: Fn(&ByteString) -> bool + 'static>(&mut self, f: F) {
+        self.general.push(Box::new(f))
     }
 
     fn verify_general(&self, value: &ByteString) -> bool {
-        for f in self.general.iter() {
-            if f(value) {
-                return true;
-            }
-        }
-        false
+        self.general.iter().any(|f| f(value))
     }
 }
 
