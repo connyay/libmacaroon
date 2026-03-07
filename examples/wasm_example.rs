@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     verifier.satisfy_exact("user = alice".into());
     verifier.satisfy_exact("action = read".into());
     
-    match verifier.verify(&deserialized, &key, Default::default()) {
+    match verifier.verify(&deserialized, &key, &[]) {
         Ok(_) => println!("✅ Macaroon verification successful!"),
         Err(e) => println!("❌ Macaroon verification failed: {}", e),
     }
@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Verify with discharge
     verifier.satisfy_exact("time < 2025-12-31".into());
-    match verifier.verify(&macaroon_with_3p, &key, vec![discharge]) {
+    match verifier.verify(&macaroon_with_3p, &key, &[discharge]) {
         Ok(_) => println!("✅ Third-party macaroon verification successful!"),
         Err(e) => println!("❌ Third-party macaroon verification failed: {}", e),
     }

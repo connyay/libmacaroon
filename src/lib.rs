@@ -55,7 +55,7 @@
 //! verifier.satisfy_exact("account = 12345678".into());
 //!
 //! // Now we verify the macaroon. It should return `Ok(true)` if the user is authorized
-//! match verifier.verify(&macaroon, &key, Default::default()) {
+//! match verifier.verify(&macaroon, &key, &[]) {
 //!     Ok(_) => println!("Macaroon verified!"),
 //!     Err(error) => println!("Error validating macaroon: {:?}", error),
 //! }
@@ -85,7 +85,7 @@
 //!
 //! // Then we can verify using the same verifier (which will verify both the existing
 //! // first-party caveat and the third party one)
-//! match verifier.verify(&macaroon, &key, vec![discharge]) {
+//! match verifier.verify(&macaroon, &key, &[discharge]) {
 //!     Ok(_) => println!("Macaroon verified!"),
 //!     Err(error) => println!("Error validating macaroon: {:?}", error),
 //! }
@@ -511,22 +511,22 @@ mod tests {
 
         let mut ver = Verifier::default();
         let wrong_key = MacaroonKey::generate(b"not what was expected");
-        let sig_err = ver.verify(&mac, &wrong_key, Default::default());
+        let sig_err = ver.verify(&mac, &wrong_key, &[]);
         assert!(matches!(sig_err, Err(MacaroonError::InvalidSignature)));
         println!("{}", sig_err.unwrap_err());
-        assert!(ver.verify(&mac, &key, Default::default()).is_ok());
+        assert!(ver.verify(&mac, &key, &[]).is_ok());
 
         mac.add_first_party_caveat("account = 3735928559".into());
-        let cav_err = ver.verify(&mac, &key, Default::default());
+        let cav_err = ver.verify(&mac, &key, &[]);
         assert!(matches!(cav_err, Err(MacaroonError::CaveatNotSatisfied(_))));
         println!("{}", cav_err.unwrap_err());
         ver.satisfy_exact("account = 3735928559".into());
-        assert!(ver.verify(&mac, &key, Default::default()).is_ok());
+        assert!(ver.verify(&mac, &key, &[]).is_ok());
 
         let mut mac2 = mac.clone();
         let cav_key = MacaroonKey::generate(b"My key");
         mac2.add_third_party_caveat("other location", &cav_key, "other ident".into());
-        let cav_err = ver.verify(&mac2, &key, Default::default());
+        let cav_err = ver.verify(&mac2, &key, &[]);
         assert!(matches!(cav_err, Err(MacaroonError::CaveatNotSatisfied(_))));
         println!("{}", cav_err.unwrap_err());
 
@@ -536,7 +536,7 @@ mod tests {
             "other keyid".into(),
         )
         .unwrap();
-        let disch_err = ver.verify(&mac, &key, vec![discharge]);
+        let disch_err = ver.verify(&mac, &key, &[discharge]);
         assert!(matches!(disch_err, Err(MacaroonError::DischargeNotUsed)));
         println!("{}", disch_err.unwrap_err());
     }

@@ -79,7 +79,7 @@ let mut verifier = Verifier::default();
 verifier.satisfy_exact("account = 12345678".into());
 
 // Now we verify the macaroon. It should return `Ok(true)` if the user is authorized
-match verifier.verify(&macaroon, &key, Default::default()) {
+match verifier.verify(&macaroon, &key, &[]) {
     Ok(_) => println!("Macaroon verified!"),
     Err(error) => println!("Error validating macaroon: {:?}", error),
 }
@@ -109,7 +109,7 @@ macaroon.bind(&mut discharge);
 
 // Then we can verify using the same verifier (which will verify both the existing
 // first-party caveat and the third party one)
-match verifier.verify(&macaroon, &key, vec![discharge]) {
+match verifier.verify(&macaroon, &key, &[discharge]) {
     Ok(_) => println!("Macaroon verified!"),
     Err(error) => println!("Error validating macaroon: {:?}", error),
 }

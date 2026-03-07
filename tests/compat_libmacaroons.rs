@@ -109,7 +109,7 @@ fn verifying_macaroons() {
     mac.add_first_party_caveat("email = alice@example.org".into());
 
     let mut ver = Verifier::default();
-    assert!(ver.verify(&mac, &key, Default::default()).is_err());
+    assert!(ver.verify(&mac, &key, &[]).is_err());
     ver.satisfy_exact("account = 3735928559".into());
     ver.satisfy_exact("email = alice@example.org".into());
     ver.satisfy_exact("IP = 127.0.0.1".into());
@@ -117,21 +117,21 @@ fn verifying_macaroons() {
     ver.satisfy_exact("action = deposit".into());
     ver.satisfy_general(check_time);
 
-    assert!(ver.verify(&mac, &key, Default::default()).is_ok());
+    assert!(ver.verify(&mac, &key, &[]).is_ok());
 
     // additional caveat which we are prepared for
     let mut mac_action = mac.clone();
     mac_action.add_first_party_caveat("action = deposit".into());
-    assert!(ver.verify(&mac_action, &key, Default::default()).is_ok());
+    assert!(ver.verify(&mac_action, &key, &[]).is_ok());
 
     // additional caveat which we are not prepared for
     let mut mac_os = mac.clone();
     mac_os.add_first_party_caveat("OS = Windows XP".into());
-    assert!(ver.verify(&mac_os, &key, Default::default()).is_err());
+    assert!(ver.verify(&mac_os, &key, &[]).is_err());
 
     // wrong secret key used in verification
     let wrong_key = MacaroonKey::generate(b"this is not the secret we were looking for");
-    assert!(ver.verify(&mac, &wrong_key, Default::default()).is_err());
+    assert!(ver.verify(&mac, &wrong_key, &[]).is_err());
 
     // "Incompetent hackers trying to change the signature"
     let b64_standard = "MDAxY2xvY2F0aW9uIGh0dHA6Ly9teWJhbmsvCjAwMjZpZGVudGlmaWVyIHdlIHVzZWQgb3VyIHNlY3JldCBrZXkKMDAxZGNpZCBhY2NvdW50ID0gMzczNTkyODU1OQowMDIwY2lkIHRpbWUgPCAyMDIwLTAxLTAxVDAwOjAwCjAwMjJjaWQgZW1haWwgPSBhbGljZUBleGFtcGxlLm9yZwowMDJmc2lnbmF0dXJlID8f19FL+bkC9p/aoMmIecC7GxdOcLVyUnrv6lJMM7NSCg==";
@@ -140,7 +140,7 @@ fn verifying_macaroons() {
     assert_eq!(mac.identifier(), bad_mac.identifier());
     assert_eq!(mac.caveats(), bad_mac.caveats());
     assert_ne!(mac.signature(), bad_mac.signature());
-    assert!(ver.verify(&bad_mac, &key, Default::default()).is_err());
+    assert!(ver.verify(&bad_mac, &key, &[]).is_err());
 }
 
 #[test]
@@ -213,6 +213,6 @@ fn third_party_macaroons() {
     let mut ver = Verifier::default();
     ver.satisfy_exact("account = 3735928559".into());
     ver.satisfy_exact("time < 2020-01-01T00:00".into());
-    assert!(ver.verify(&mac, &key, vec![discharge_mac]).is_err());
-    assert!(ver.verify(&mac, &key, vec![bound_mac]).is_ok());
+    assert!(ver.verify(&mac, &key, &[discharge_mac]).is_err());
+    assert!(ver.verify(&mac, &key, &[bound_mac]).is_ok());
 }
