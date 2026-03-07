@@ -6,9 +6,9 @@
 use crate::crypto::{CryptoBackend, MacaroonKey};
 use crate::error::MacaroonError;
 use crate::Result;
-use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit},
-    XChaCha20Poly1305, XNonce, Key as AeadKey
+use xsalsa20poly1305::{
+    aead::{Aead, KeyInit},
+    XSalsa20Poly1305, Nonce, Key as AeadKey
 };
 use hmac::{Hmac, Mac};
 #[cfg(not(target_arch = "wasm32"))]
@@ -65,11 +65,12 @@ impl CryptoBackend for RustCryptoBackend {
     where
         T: AsRef<[u8; 32]> + ?Sized,
     {
-        // Use XChaCha20Poly1305 for compatibility with XSalsa20Poly1305 (both use 24-byte nonces)
-        let cipher = XChaCha20Poly1305::new(AeadKey::from_slice(key.as_ref()));
-        
+        let cipher = XSalsa20Poly1305::new(AeadKey::from_slice(key.as_ref()));
+
         // Generate a random 24-byte nonce
-        let nonce = XChaCha20Poly1305::generate_nonce(&mut rand::thread_rng());
+        let mut nonce_bytes = [0u8; 24];
+        rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut nonce_bytes);
+        let nonce = Nonce::from(nonce_bytes);
         
         // Encrypt the plaintext
         let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref() as &[u8])
@@ -89,21 +90,21 @@ impl CryptoBackend for RustCryptoBackend {
     {
         let raw_data: &[u8] = data.as_ref();
         
-        // XChaCha20Poly1305: 24 byte nonce + 16 byte tag = minimum 40 bytes
+        // XSalsa20Poly1305: 24 byte nonce + 16 byte tag = minimum 40 bytes
         const NONCE_SIZE: usize = 24;
         const TAG_SIZE: usize = 16;
-        
+
         if raw_data.len() < NONCE_SIZE + TAG_SIZE {
             error!("crypto::decrypt: Encrypted data {:?} too short", raw_data);
             return Err(MacaroonError::CryptoError("encrypted data too short"));
         }
-        
+
         // Extract nonce and ciphertext
-        let nonce = XNonce::from_slice(&raw_data[..NONCE_SIZE]);
+        let nonce = Nonce::from_slice(&raw_data[..NONCE_SIZE]);
         let ciphertext = &raw_data[NONCE_SIZE..];
-        
+
         // Create cipher and decrypt
-        let cipher = XChaCha20Poly1305::new(AeadKey::from_slice(key.as_ref()));
+        let cipher = XSalsa20Poly1305::new(AeadKey::from_slice(key.as_ref()));
         
         match cipher.decrypt(nonce, ciphertext) {
             Ok(plaintext) => {
