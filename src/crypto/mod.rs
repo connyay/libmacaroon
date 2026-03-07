@@ -9,6 +9,8 @@ use crate::Result;
 use rustcrypto::RustCryptoBackend;
 use std::borrow::Borrow;
 use std::ops::{Deref, DerefMut};
+use subtle::ConstantTimeEq;
+use zeroize::Zeroize;
 
 /// Secret cryptographic key used to sign and verify Macaroons.
 ///
@@ -17,8 +19,8 @@ use std::ops::{Deref, DerefMut};
 /// bytes; generated randomly; or generated via an HMAC from a byte string of any length. For
 /// security, keys should be generated using at least 32 bytes of entropy, and stored securely.
 ///
-/// No special techniques are used by this crate to keep key material safe in memory. The `Debug`
-/// trait will output the secret key material, which could end up leaked in logs.
+/// Key material is zeroized on drop and compared in constant time to prevent
+/// timing side-channel attacks. The `Debug` implementation is redacted.
 ///
 /// ## Creation
 ///
@@ -42,8 +44,22 @@ use std::ops::{Deref, DerefMut};
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Zeroize)]
 pub struct MacaroonKey([u8; 32]);
+
+impl std::fmt::Debug for MacaroonKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("MacaroonKey([REDACTED])")
+    }
+}
+
+impl PartialEq for MacaroonKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.ct_eq(&other.0).into()
+    }
+}
+
+impl Eq for MacaroonKey {}
 
 impl AsRef<[u8; 32]> for MacaroonKey {
     fn as_ref(&self) -> &[u8; 32] {

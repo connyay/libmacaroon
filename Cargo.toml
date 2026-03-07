@@ -27,6 +27,8 @@ sha2 = "0.10"
 xsalsa20poly1305 = "0.9"
 rand = "0.8"
 getrandom = "0.2"
+subtle = "2.6"
+zeroize = { version = "1.6", features = ["derive"] }
 
 [dev-dependencies]
 env_logger = "0.9"
