@@ -40,7 +40,7 @@ impl Serialization {
             c: Vec::new(),
             s: None,
             s64: Some(base64::encode_config(
-                &macaroon.signature(),
+                macaroon.signature(),
                 base64::URL_SAFE,
             )),
         };

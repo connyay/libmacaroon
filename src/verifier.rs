@@ -12,7 +12,6 @@ pub struct Verifier {
     general: Vec<Box<dyn Fn(&ByteString) -> bool>>,
 }
 
-
 impl Verifier {
     pub fn verify(&self, m: &Macaroon, key: &MacaroonKey, discharges: &[Macaroon]) -> Result<()> {
         let mut discharge_set = discharges
@@ -99,9 +98,7 @@ mod tests {
         let key = MacaroonKey::generate(b"this is the key");
         let macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
         let verifier = Verifier::default();
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap();
+        verifier.verify(&macaroon, &key, &[]).unwrap();
     }
 
     #[test]
@@ -110,9 +107,7 @@ mod tests {
             Macaroon::create(None, &MacaroonKey::generate(b"key"), "testing".into()).unwrap();
         let key = MacaroonKey::generate(b"this is not the key");
         let verifier = Verifier::default();
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap_err();
+        verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
     #[test]
@@ -122,9 +117,7 @@ mod tests {
         macaroon.add_first_party_caveat("account = 3735928559".into());
         let mut verifier = Verifier::default();
         verifier.satisfy_exact("account = 3735928559".into());
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap()
+        verifier.verify(&macaroon, &key, &[]).unwrap()
     }
 
     #[test]
@@ -134,9 +127,7 @@ mod tests {
         macaroon.add_first_party_caveat("account = 3735928559".into());
         let mut verifier = Verifier::default();
         verifier.satisfy_exact("account = 0000000000".into());
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap_err();
+        verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
     #[test]
@@ -145,9 +136,7 @@ mod tests {
         let mut macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
         macaroon.add_first_party_caveat("account = 3735928559".into());
         let verifier = Verifier::default();
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap_err();
+        verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
     #[test]
@@ -159,9 +148,7 @@ mod tests {
         let mut verifier = Verifier::default();
         verifier.satisfy_exact("account = 3735928559".into());
         verifier.satisfy_exact("user = alice".into());
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap()
+        verifier.verify(&macaroon, &key, &[]).unwrap()
     }
 
     #[test]
@@ -172,14 +159,10 @@ mod tests {
         macaroon.add_first_party_caveat("user = alice".into());
         let mut verifier = Verifier::default();
         verifier.satisfy_exact("account = 3735928559".into());
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap_err();
+        verifier.verify(&macaroon, &key, &[]).unwrap_err();
         let mut verifier = Verifier::default();
         verifier.satisfy_exact("user = alice".into());
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap_err();
+        verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
     fn after_time_verifier(caveat: &ByteString) -> bool {
@@ -213,9 +196,7 @@ mod tests {
         verifier.satisfy_exact("account = 3735928559".into());
         verifier.satisfy_exact("user = alice".into());
         verifier.satisfy_general(after_time_verifier);
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap()
+        verifier.verify(&macaroon, &key, &[]).unwrap()
     }
 
     #[test]
@@ -230,9 +211,7 @@ mod tests {
         verifier.satisfy_exact("account = 3735928559".into());
         verifier.satisfy_exact("user = alice".into());
         verifier.satisfy_general(after_time_verifier);
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap_err();
+        verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
     #[test]
@@ -246,9 +225,7 @@ mod tests {
         let mut verifier = Verifier::default();
         verifier.satisfy_exact("account = 3735928559".into());
         verifier.satisfy_exact("user = alice".into());
-        verifier
-            .verify(&macaroon, &key, &[])
-            .unwrap_err();
+        verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
     #[test]
@@ -272,9 +249,7 @@ mod tests {
         macaroon.bind(&mut discharge);
         let mut verifier = Verifier::default();
         verifier.satisfy_general(after_time_verifier);
-        verifier
-            .verify(&macaroon, &root_key, &[discharge])
-            .unwrap()
+        verifier.verify(&macaroon, &root_key, &[discharge]).unwrap()
     }
 
     #[test]

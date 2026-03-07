@@ -68,7 +68,7 @@ struct Deserializer<'r> {
 }
 
 impl<'r> Deserializer<'r> {
-    pub fn new(data: &[u8]) -> Deserializer {
+    pub fn new(data: &[u8]) -> Deserializer<'_> {
         Deserializer { data, index: 0 }
     }
 
