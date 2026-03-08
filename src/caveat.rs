@@ -17,8 +17,8 @@ pub struct FirstParty {
 }
 
 impl FirstParty {
-    pub fn predicate(&self) -> ByteString {
-        self.predicate.clone()
+    pub fn predicate(&self) -> &[u8] {
+        &self.predicate.0
     }
 }
 
@@ -30,14 +30,14 @@ pub struct ThirdParty {
 }
 
 impl ThirdParty {
-    pub fn id(&self) -> ByteString {
-        self.id.clone()
+    pub fn id(&self) -> &[u8] {
+        &self.id.0
     }
-    pub fn verifier_id(&self) -> ByteString {
-        self.verifier_id.clone()
+    pub fn verifier_id(&self) -> &[u8] {
+        &self.verifier_id.0
     }
-    pub fn location(&self) -> String {
-        self.location.clone()
+    pub fn location(&self) -> &str {
+        &self.location
     }
 }
 
@@ -95,22 +95,14 @@ impl CaveatBuilder {
     }
 
     pub fn build(self) -> Result<Caveat> {
-        if self.id.is_none() {
-            return Err(MacaroonError::IncompleteCaveat("no identifier found"));
+        let id = self
+            .id
+            .ok_or(MacaroonError::IncompleteCaveat("no identifier found"))?;
+        match (self.verifier_id, self.location) {
+            (None, None) => Ok(new_first_party(id)),
+            (Some(vid), Some(location)) => Ok(new_third_party(id, vid, &location)),
+            (None, Some(_)) => Err(MacaroonError::IncompleteCaveat("no verifier ID found")),
+            (Some(_), None) => Err(MacaroonError::IncompleteCaveat("no location found")),
         }
-        if self.verifier_id.is_none() && self.location.is_none() {
-            return Ok(new_first_party(self.id.unwrap()));
-        }
-        if self.verifier_id.is_some() && self.location.is_some() {
-            return Ok(new_third_party(
-                self.id.unwrap(),
-                self.verifier_id.unwrap(),
-                &self.location.unwrap(),
-            ));
-        }
-        if self.verifier_id.is_none() {
-            return Err(MacaroonError::IncompleteCaveat("no verifier ID found"));
-        }
-        Err(MacaroonError::IncompleteCaveat("no location found"))
     }
 }

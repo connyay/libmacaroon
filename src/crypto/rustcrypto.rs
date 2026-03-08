@@ -7,6 +7,7 @@ use super::MacaroonKey;
 use crate::error::MacaroonError;
 use crate::Result;
 use hmac::{Hmac, Mac};
+use log::error;
 use sha2::Sha256;
 use xsalsa20poly1305::{
     aead::{Aead, KeyInit},

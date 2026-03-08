@@ -30,12 +30,12 @@ struct Serialization {
 }
 
 impl Serialization {
-    fn from_macaroon(macaroon: Macaroon) -> Result<Serialization> {
+    fn from_macaroon(macaroon: &Macaroon) -> Result<Serialization> {
         let mut serialized: Serialization = Serialization {
             v: 2,
             i: None,
-            i64: Some(macaroon.identifier()),
-            l: macaroon.location(),
+            i64: Some(ByteString(macaroon.identifier().to_vec())),
+            l: macaroon.location().map(|s| s.to_string()),
             l64: None,
             c: Vec::new(),
             s: None,
@@ -49,7 +49,7 @@ impl Serialization {
                 caveat::Caveat::FirstParty(fp) => {
                     let serialized_caveat: Caveat = Caveat {
                         i: None,
-                        i64: Some(fp.predicate()),
+                        i64: Some(ByteString(fp.predicate().to_vec())),
                         l: None,
                         l64: None,
                         v: None,
@@ -60,11 +60,11 @@ impl Serialization {
                 caveat::Caveat::ThirdParty(tp) => {
                     let serialized_caveat: Caveat = Caveat {
                         i: None,
-                        i64: Some(tp.id()),
-                        l: Some(tp.location()),
+                        i64: Some(ByteString(tp.id().to_vec())),
+                        l: Some(tp.location().to_string()),
                         l64: None,
                         v: None,
-                        v64: Some(tp.verifier_id()),
+                        v64: Some(ByteString(tp.verifier_id().to_vec())),
                     };
                     serialized.c.push(serialized_caveat);
                 }
@@ -180,8 +180,7 @@ impl Macaroon {
 }
 
 pub fn serialize(macaroon: &Macaroon) -> Result<String> {
-    let serialized: String =
-        serde_json::to_string(&Serialization::from_macaroon(macaroon.clone())?)?;
+    let serialized: String = serde_json::to_string(&Serialization::from_macaroon(macaroon)?)?;
     Ok(serialized)
 }
 
@@ -193,7 +192,7 @@ pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
 #[cfg(test)]
 mod tests {
     use super::super::Format;
-    use crate::{ByteString, Caveat, Macaroon, MacaroonKey};
+    use crate::{Caveat, Macaroon, MacaroonKey};
 
     const SERIALIZED_JSON: &str = "{\"v\":2,\"l\":\"http://example.org/\",\"i\":\"keyid\",\
                                    \"c\":[{\"i\":\"account = 3735928559\"},{\"i\":\"user = \
@@ -208,20 +207,20 @@ mod tests {
     fn test_deserialize() {
         let serialized_json: Vec<u8> = SERIALIZED_JSON.as_bytes().to_vec();
         let macaroon = super::deserialize(&serialized_json).unwrap();
-        assert_eq!("http://example.org/", &macaroon.location().unwrap());
-        assert_eq!(ByteString::from("keyid"), macaroon.identifier());
+        assert_eq!("http://example.org/", macaroon.location().unwrap());
+        assert_eq!(b"keyid", macaroon.identifier());
         assert_eq!(2, macaroon.caveats().len());
         let predicate = match &macaroon.caveats()[0] {
-            Caveat::FirstParty(fp) => fp.predicate(),
-            _ => ByteString::default(),
+            Caveat::FirstParty(fp) => fp.predicate().to_vec(),
+            _ => vec![],
         };
-        assert_eq!(ByteString::from("account = 3735928559"), predicate);
+        assert_eq!(b"account = 3735928559".to_vec(), predicate);
         let predicate = match &macaroon.caveats()[1] {
-            Caveat::FirstParty(fp) => fp.predicate(),
-            _ => ByteString::default(),
+            Caveat::FirstParty(fp) => fp.predicate().to_vec(),
+            _ => vec![],
         };
-        assert_eq!(ByteString::from("user = alice"), predicate);
-        assert_eq!(MacaroonKey::from(SIGNATURE), macaroon.signature());
+        assert_eq!(b"user = alice".to_vec(), predicate);
+        assert_eq!(&MacaroonKey::from(SIGNATURE), macaroon.signature());
     }
 
     #[test]
@@ -229,14 +228,14 @@ mod tests {
         let mut macaroon = Macaroon::create(
             Some("http://example.org/".into()),
             &SIGNATURE.into(),
-            "keyid".into(),
+            "keyid",
         )
         .unwrap();
-        macaroon.add_first_party_caveat("user = alice".into());
+        macaroon.add_first_party_caveat("user = alice");
         macaroon.add_third_party_caveat(
             "https://auth.mybank.com/",
             &MacaroonKey::generate(b"my key"),
-            "keyid".into(),
+            "keyid",
         );
         let serialized = macaroon.serialize(Format::V2JSON).unwrap();
         let other = Macaroon::deserialize(&serialized).unwrap();

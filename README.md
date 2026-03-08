@@ -54,14 +54,11 @@ the above process.
 ```rust
 use macaroon::{Macaroon, Verifier, MacaroonKey};
 
-// Initialize to make crypto primitives thread-safe
-macaroon::initialize().unwrap(); // Force panic if initialization fails
-
 // Create our key
 let key = MacaroonKey::generate(b"key");
 
 // Create our macaroon. A location is optional.
-let mut macaroon = match Macaroon::create(Some("location".into()), &key, "id".into()) {
+let mut macaroon = match Macaroon::create(Some("location".into()), &key, "id") {
     Ok(macaroon) => macaroon,
     Err(error) => panic!("Error creating macaroon: {:?}", error),
 };
@@ -69,14 +66,14 @@ let mut macaroon = match Macaroon::create(Some("location".into()), &key, "id".in
 // Add our first-party caveat. We say that only someone with account 12345678
 // is authorized to access whatever the macaroon is protecting
 // Note that we can add however many of these we want, with different predicates
-macaroon.add_first_party_caveat("account = 12345678".into());
+macaroon.add_first_party_caveat("account = 12345678");
 
 // Now we verify the macaroon
 // First we create the verifier
 let mut verifier = Verifier::default();
 
 // We assert that the account number is "12345678"
-verifier.satisfy_exact("account = 12345678".into());
+verifier.satisfy_exact("account = 12345678");
 
 // Now we verify the macaroon. It should return `Ok(true)` if the user is authorized
 match verifier.verify(&macaroon, &key, &[]) {
@@ -90,19 +87,19 @@ match verifier.verify(&macaroon, &key, &[]) {
 // Create a key for the third party caveat
 let other_key = MacaroonKey::generate(b"different key");
 
-macaroon.add_third_party_caveat("https://auth.mybank", &other_key, "caveat id".into());
+macaroon.add_third_party_caveat("https://auth.mybank", &other_key, "caveat id");
 
 // When we're ready to verify a third-party caveat, we use the location
 // (in this case, "https://auth.mybank") to retrieve the discharge macaroons we use to verify.
 // These would be created by the third party like so:
 let mut discharge = match Macaroon::create(Some("http://auth.mybank/".into()),
                                            &other_key,
-                                           "caveat id".into()) {
+                                           "caveat id") {
     Ok(discharge) => discharge,
     Err(error) => panic!("Error creating discharge macaroon: {:?}", error),
 };
 // And this is the criterion the third party requires for authorization
-discharge.add_first_party_caveat("account = 12345678".into());
+discharge.add_first_party_caveat("account = 12345678");
 
 // Once we receive the discharge macaroon, we bind it to the original macaroon
 macaroon.bind(&mut discharge);

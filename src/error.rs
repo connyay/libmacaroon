@@ -3,10 +3,6 @@ use std::{num, str, string};
 /// Represents all of the errors that can arise when creating, deserializing, or verifying macaroons.
 #[derive(Debug)]
 pub enum MacaroonError {
-    /// Only raised by the [`initialize()`](crate::initialize) function, when there is a problem
-    /// initializing the lower-level crypto library
-    InitializationError,
-
     /// Represents a runtime error in the lower-level cryptographic library, or situations like
     /// zero-length ciphertext.
     CryptoError(&'static str),
@@ -70,10 +66,6 @@ impl std::error::Error for MacaroonError {}
 impl std::fmt::Display for MacaroonError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            MacaroonError::InitializationError => write!(
-                f,
-                "Failed to initialize cryptographic library for this thread"
-            ),
             MacaroonError::CryptoError(s) => write!(
                 f,
                 "Error performing lower-level cryptographic function: {}",

@@ -3,13 +3,12 @@ use crate::{ByteString, Caveat, Macaroon, MacaroonError, MacaroonKey, Result};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
-/// Function pointer type for general verifiers (retained for backwards compatibility).
-pub type VerifyFunc = fn(&ByteString) -> bool;
+type GeneralVerifier = Box<dyn Fn(&[u8]) -> bool>;
 
 #[derive(Default)]
 pub struct Verifier {
     exact: BTreeSet<ByteString>,
-    general: Vec<Box<dyn Fn(&ByteString) -> bool>>,
+    general: Vec<GeneralVerifier>,
 }
 
 impl Verifier {
@@ -33,25 +32,21 @@ impl Verifier {
         key: &MacaroonKey,
         discharge_set: &mut HashMap<ByteString, Macaroon>,
     ) -> Result<()> {
-        let mut sig = crypto::hmac(key, &m.identifier());
+        let mut sig = crypto::hmac(key, m.identifier());
         for c in m.caveats() {
-            sig = match &c {
+            sig = match c {
                 Caveat::ThirdParty(tp) => {
-                    let caveat_key = crypto::decrypt_key(&sig, &tp.verifier_id().0)?;
-                    let dm = discharge_set.remove(&tp.id()).ok_or_else(|| MacaroonError::CaveatNotSatisfied("no discharge macaroon found (or discharge has already been used) for third-party caveat".to_string()))?;
+                    let caveat_key = crypto::decrypt_key(&sig, tp.verifier_id())?;
+                    let dm = discharge_set.remove(tp.id()).ok_or_else(|| MacaroonError::CaveatNotSatisfied("no discharge macaroon found (or discharge has already been used) for third-party caveat".to_string()))?;
                     self.verify_with_sig(root_sig, &dm, &caveat_key, discharge_set)?;
                     c.sign(&sig)
                 }
                 Caveat::FirstParty(fp) => {
-                    // This checks exact caveats first and then general second
-                    // if it fails due to logic short circuiting
-                    if !(self.exact.contains(&fp.predicate())
-                        || self.verify_general(&fp.predicate()))
+                    if !(self.exact.contains(fp.predicate()) || self.verify_general(fp.predicate()))
                     {
-                        // If both failed, it means we weren't successful at either
                         return Err(MacaroonError::CaveatNotSatisfied(format!(
                             "first party caveat not satisfied: {}",
-                            String::from_utf8_lossy(fp.predicate().as_ref())
+                            String::from_utf8_lossy(fp.predicate())
                         )));
                     }
                     c.sign(&sig)
@@ -73,15 +68,15 @@ impl Verifier {
         Ok(())
     }
 
-    pub fn satisfy_exact(&mut self, b: ByteString) {
-        self.exact.insert(b);
+    pub fn satisfy_exact(&mut self, b: impl AsRef<[u8]>) {
+        self.exact.insert(ByteString(b.as_ref().to_vec()));
     }
 
-    pub fn satisfy_general<F: Fn(&ByteString) -> bool + 'static>(&mut self, f: F) {
+    pub fn satisfy_general<F: Fn(&[u8]) -> bool + 'static>(&mut self, f: F) {
         self.general.push(Box::new(f))
     }
 
-    fn verify_general(&self, value: &ByteString) -> bool {
+    fn verify_general(&self, value: &[u8]) -> bool {
         self.general.iter().any(|f| f(value))
     }
 }
@@ -91,20 +86,19 @@ mod tests {
     extern crate time;
 
     use super::Verifier;
-    use crate::{ByteString, Macaroon, MacaroonError, MacaroonKey};
+    use crate::{Macaroon, MacaroonError, MacaroonKey};
 
     #[test]
     fn test_simple_macaroon() {
         let key = MacaroonKey::generate(b"this is the key");
-        let macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
+        let macaroon = Macaroon::create(None, &key, "testing").unwrap();
         let verifier = Verifier::default();
         verifier.verify(&macaroon, &key, &[]).unwrap();
     }
 
     #[test]
     fn test_simple_macaroon_bad_verifier_key() {
-        let macaroon =
-            Macaroon::create(None, &MacaroonKey::generate(b"key"), "testing".into()).unwrap();
+        let macaroon = Macaroon::create(None, &MacaroonKey::generate(b"key"), "testing").unwrap();
         let key = MacaroonKey::generate(b"this is not the key");
         let verifier = Verifier::default();
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
@@ -113,28 +107,28 @@ mod tests {
     #[test]
     fn test_macaroon_exact_caveat() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
+        let mut macaroon = Macaroon::create(None, &key, "testing").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("account = 3735928559".into());
+        verifier.satisfy_exact("account = 3735928559");
         verifier.verify(&macaroon, &key, &[]).unwrap()
     }
 
     #[test]
     fn test_macaroon_exact_caveat_wrong_verifier() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
+        let mut macaroon = Macaroon::create(None, &key, "testing").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("account = 0000000000".into());
+        verifier.satisfy_exact("account = 0000000000");
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
     #[test]
     fn test_macaroon_exact_caveat_wrong_context() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
+        let mut macaroon = Macaroon::create(None, &key, "testing").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
         let verifier = Verifier::default();
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
@@ -142,34 +136,34 @@ mod tests {
     #[test]
     fn test_macaroon_two_exact_caveats() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
-        macaroon.add_first_party_caveat("user = alice".into());
+        let mut macaroon = Macaroon::create(None, &key, "testing").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
+        macaroon.add_first_party_caveat("user = alice");
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("account = 3735928559".into());
-        verifier.satisfy_exact("user = alice".into());
+        verifier.satisfy_exact("account = 3735928559");
+        verifier.satisfy_exact("user = alice");
         verifier.verify(&macaroon, &key, &[]).unwrap()
     }
 
     #[test]
     fn test_macaroon_two_exact_caveats_incomplete_verifier() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon = Macaroon::create(None, &key, "testing".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
-        macaroon.add_first_party_caveat("user = alice".into());
+        let mut macaroon = Macaroon::create(None, &key, "testing").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
+        macaroon.add_first_party_caveat("user = alice");
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("account = 3735928559".into());
+        verifier.satisfy_exact("account = 3735928559");
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("user = alice".into());
+        verifier.satisfy_exact("user = alice");
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
-    fn after_time_verifier(caveat: &ByteString) -> bool {
-        if !caveat.0.starts_with(b"time > ") {
+    fn after_time_verifier(caveat: &[u8]) -> bool {
+        if !caveat.starts_with(b"time > ") {
             return false;
         }
-        let strcaveat = match std::str::from_utf8(&caveat.0) {
+        let strcaveat = match std::str::from_utf8(caveat) {
             Ok(s) => s,
             Err(_) => return false,
         };
@@ -188,13 +182,13 @@ mod tests {
     fn test_macaroon_two_exact_and_one_general_caveat() {
         let key = MacaroonKey::generate(b"this is the key");
         let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &key, "keyid".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
-        macaroon.add_first_party_caveat("user = alice".into());
-        macaroon.add_first_party_caveat("time > 2010-01-01T00:00+0000".into());
+            Macaroon::create(Some("http://example.org/".into()), &key, "keyid").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
+        macaroon.add_first_party_caveat("user = alice");
+        macaroon.add_first_party_caveat("time > 2010-01-01T00:00+0000");
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("account = 3735928559".into());
-        verifier.satisfy_exact("user = alice".into());
+        verifier.satisfy_exact("account = 3735928559");
+        verifier.satisfy_exact("user = alice");
         verifier.satisfy_general(after_time_verifier);
         verifier.verify(&macaroon, &key, &[]).unwrap()
     }
@@ -203,13 +197,13 @@ mod tests {
     fn test_macaroon_two_exact_and_one_general_fails_general() {
         let key = MacaroonKey::generate(b"this is the key");
         let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &key, "keyid".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
-        macaroon.add_first_party_caveat("user = alice".into());
-        macaroon.add_first_party_caveat("time > 3010-01-01T00:00+0000".into());
+            Macaroon::create(Some("http://example.org/".into()), &key, "keyid").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
+        macaroon.add_first_party_caveat("user = alice");
+        macaroon.add_first_party_caveat("time > 3010-01-01T00:00+0000");
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("account = 3735928559".into());
-        verifier.satisfy_exact("user = alice".into());
+        verifier.satisfy_exact("account = 3735928559");
+        verifier.satisfy_exact("user = alice");
         verifier.satisfy_general(after_time_verifier);
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
@@ -218,13 +212,13 @@ mod tests {
     fn test_macaroon_two_exact_and_one_general_incomplete_verifier() {
         let key = MacaroonKey::generate(b"this is the key");
         let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &key, "keyid".into()).unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559".into());
-        macaroon.add_first_party_caveat("user = alice".into());
-        macaroon.add_first_party_caveat("time > 2010-01-01T00:00+0000".into());
+            Macaroon::create(Some("http://example.org/".into()), &key, "keyid").unwrap();
+        macaroon.add_first_party_caveat("account = 3735928559");
+        macaroon.add_first_party_caveat("user = alice");
+        macaroon.add_first_party_caveat("time > 2010-01-01T00:00+0000");
         let mut verifier = Verifier::default();
-        verifier.satisfy_exact("account = 3735928559".into());
-        verifier.satisfy_exact("user = alice".into());
+        verifier.satisfy_exact("account = 3735928559");
+        verifier.satisfy_exact("user = alice");
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
@@ -232,20 +226,16 @@ mod tests {
     fn test_macaroon_third_party_caveat() {
         let root_key = MacaroonKey::generate(b"this is the key");
         let another_key = MacaroonKey::generate(b"this is another key");
-        let mut macaroon = Macaroon::create(
-            Some("http://example.org/".into()),
-            &root_key,
-            "keyid".into(),
-        )
-        .unwrap();
-        macaroon.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid".into());
+        let mut macaroon =
+            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
+        macaroon.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid");
         let mut discharge = Macaroon::create(
             Some("http://auth.mybank/".into()),
             &another_key,
-            "other keyid".into(),
+            "other keyid",
         )
         .unwrap();
-        discharge.add_first_party_caveat("time > 2010-01-01T00:00+0000".into());
+        discharge.add_first_party_caveat("time > 2010-01-01T00:00+0000");
         macaroon.bind(&mut discharge);
         let mut verifier = Verifier::default();
         verifier.satisfy_general(after_time_verifier);
@@ -256,20 +246,16 @@ mod tests {
     fn test_macaroon_third_party_caveat_with_cycle() {
         let root_key = MacaroonKey::generate(b"this is the key");
         let another_key = MacaroonKey::generate(b"this is another key");
-        let mut macaroon = Macaroon::create(
-            Some("http://example.org/".into()),
-            &root_key,
-            "keyid".into(),
-        )
-        .unwrap();
-        macaroon.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid".into());
+        let mut macaroon =
+            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
+        macaroon.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid");
         let mut discharge = Macaroon::create(
             Some("http://auth.mybank/".into()),
             &another_key,
-            "other keyid".into(),
+            "other keyid",
         )
         .unwrap();
-        discharge.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid".into());
+        discharge.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid");
         macaroon.bind(&mut discharge);
         let mut verifier = Verifier::default();
         verifier.satisfy_general(after_time_verifier);
@@ -282,19 +268,15 @@ mod tests {
     fn test_macaroon_third_party_unsatisfied() {
         let root_key = MacaroonKey::generate(b"this is the key");
         let another_key = MacaroonKey::generate(b"this is another key");
-        let mut macaroon = Macaroon::create(
-            Some("http://example.org/".into()),
-            &root_key,
-            "keyid".into(),
-        )
-        .unwrap();
+        let mut macaroon =
+            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
 
         // with no caveats, should verify fine
         let verifier = Verifier::default();
         verifier.verify(&macaroon, &root_key, &[]).unwrap();
 
         // add a third party caveat but no satisfier, should fail
-        macaroon.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid".into());
+        macaroon.add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid");
         assert!(matches!(
             verifier.verify(&macaroon, &root_key, &[]),
             Err(MacaroonError::CaveatNotSatisfied(_))
