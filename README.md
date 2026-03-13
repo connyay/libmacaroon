@@ -58,14 +58,16 @@ use macaroon::{Macaroon, Verifier, MacaroonKey};
 let key = MacaroonKey::generate(b"key");
 
 // Create our macaroon. A location is optional.
+// The identifier accepts any type that implements AsRef<[u8]>.
 let mut macaroon = match Macaroon::create(Some("location".into()), &key, "id") {
     Ok(macaroon) => macaroon,
     Err(error) => panic!("Error creating macaroon: {:?}", error),
 };
 
 // Add our first-party caveat. We say that only someone with account 12345678
-// is authorized to access whatever the macaroon is protecting
-// Note that we can add however many of these we want, with different predicates
+// is authorized to access whatever the macaroon is protecting.
+// Note that we can add however many of these we want, with different predicates.
+// Predicates accept any type that implements AsRef<[u8]>.
 macaroon.add_first_party_caveat("account = 12345678");
 
 // Now we verify the macaroon
@@ -75,7 +77,8 @@ let mut verifier = Verifier::default();
 // We assert that the account number is "12345678"
 verifier.satisfy_exact("account = 12345678");
 
-// Now we verify the macaroon. It should return `Ok(true)` if the user is authorized
+// Now we verify the macaroon. It should return Ok(()) if the user is authorized.
+// Discharges are passed as a borrowed slice.
 match verifier.verify(&macaroon, &key, &[]) {
     Ok(_) => println!("Macaroon verified!"),
     Err(error) => println!("Error validating macaroon: {:?}", error),
@@ -112,6 +115,35 @@ match verifier.verify(&macaroon, &key, &[discharge]) {
 }
 ```
 
+## API Changes (0.3.x)
+
+This version includes several breaking changes from 0.2.x:
+
+- **`initialize()` removed** — The library no longer requires explicit initialization.
+  The cryptographic backend is now pure Rust and thread-safe by default.
+- **`ByteString` removed from public API** — All public methods now use `&[u8]`,
+  `&str`, or `impl AsRef<[u8]>` instead of `ByteString`.
+- **`MacaroonKey`** — Now uses `Zeroize` on drop and constant-time equality. No
+  longer implements `Copy` (use `.clone()` for explicit copies). Debug output is
+  redacted. New constructors: `MacaroonKey::generate_random()` and
+  `MacaroonKey::generate(seed)`.
+- **`Macaroon` accessor changes:**
+  - `identifier()` returns `&[u8]` (was `ByteString`)
+  - `location()` returns `Option<&str>` (was `Option<String>`)
+  - `signature()` returns `&MacaroonKey` (was `MacaroonKey`)
+  - `caveats()` returns `&[Caveat]` (was `Vec<Caveat>`)
+  - `first_party_caveats()` / `third_party_caveats()` return `Vec<&Caveat>` (was `Vec<Caveat>`)
+- **`Macaroon::create()`** — Identifier parameter now accepts `impl AsRef<[u8]>` (was `ByteString`).
+- **`add_first_party_caveat()`** — Predicate now accepts `impl AsRef<[u8]>` (was `ByteString`).
+- **`add_third_party_caveat()`** — ID now accepts `impl AsRef<[u8]>` (was `ByteString`).
+- **`Verifier::verify()`** — Discharges parameter is now `&[Macaroon]` (was `Vec<Macaroon>`).
+- **`Verifier::satisfy_exact()`** — Now accepts `impl AsRef<[u8]>` (was `ByteString`).
+- **`Verifier::satisfy_general()`** — Now accepts closures (`Fn(&[u8]) -> bool`)
+  instead of only function pointers. `VerifyFunc` type alias removed.
+- **`Caveat` sub-types exported** — `FirstParty` and `ThirdParty` are now public.
+  Their accessors return `&[u8]` and `&str` instead of owned types.
+- **`MacaroonError::InitializationError` removed** — No longer applicable.
+
 ## Backwards compatibility
 
 As the original project is currently only released as a minor version, we expect to make
@@ -130,10 +162,10 @@ This crate now supports WebAssembly! Use the `wasm` feature to enable WASM compa
 macaroon = { version = "0.3", default-features = false, features = ["wasm"] }
 ```
 
-The WASM feature uses the RustCrypto ecosystem instead of libsodium, providing:
-- Pure Rust implementation (no C dependencies)
-- Native WASM compilation support
-- Compatible cryptographic operations (HMAC-SHA256, XChaCha20Poly1305)
+The `wasm` feature enables browser-compatible random number generation. The
+cryptographic backend is always pure Rust (RustCrypto), so WASM compilation
+works out of the box — the feature flag only configures `getrandom` for
+JavaScript environments.
 
 ### Building for WASM
 
