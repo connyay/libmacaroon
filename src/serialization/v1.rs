@@ -136,7 +136,7 @@ pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
             }
             SIGNATURE => {
                 if caveat_builder.has_id() {
-                    builder.add_caveat(caveat_builder.build()?);
+                    builder.add_caveat(caveat_builder.build()?)?;
                     caveat_builder = CaveatBuilder::new();
                 }
                 if packet.value.len() != 32 {
@@ -154,7 +154,7 @@ pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
             }
             CID => {
                 if caveat_builder.has_id() {
-                    builder.add_caveat(caveat_builder.build()?);
+                    builder.add_caveat(caveat_builder.build()?)?;
                     caveat_builder = CaveatBuilder::new();
                     caveat_builder.add_id(ByteString(packet.value));
                 } else {

@@ -207,12 +207,12 @@ pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
             VID => {
                 let field: Vec<u8> = deserializer.get_field()?;
                 caveat_builder.add_verifier_id(ByteString(field));
-                builder.add_caveat(caveat_builder.build()?);
+                builder.add_caveat(caveat_builder.build()?)?;
                 deserializer.get_eos()?;
                 tag = deserializer.get_tag()?;
             }
             EOS => {
-                builder.add_caveat(caveat_builder.build()?);
+                builder.add_caveat(caveat_builder.build()?)?;
                 tag = deserializer.get_tag()?;
             }
             _ => {
@@ -279,8 +279,12 @@ mod tests {
             134, 218, 11, 168, 94, 140, 66, 169, 60, 141, 14, 18, 94, 252,
         ];
         let mut builder = MacaroonBuilder::new();
-        builder.add_caveat(caveat::new_first_party("account = 3735928559".into()));
-        builder.add_caveat(caveat::new_first_party("user = alice".into()));
+        builder
+            .add_caveat(caveat::new_first_party("account = 3735928559".into()))
+            .unwrap();
+        builder
+            .add_caveat(caveat::new_first_party("user = alice".into()))
+            .unwrap();
         builder.set_location("http://example.org/");
         builder.set_identifier("keyid".into());
         builder.set_signature(&SIGNATURE);

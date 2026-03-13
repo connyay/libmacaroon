@@ -2,6 +2,8 @@ use crate::caveat::Caveat;
 use crate::error::MacaroonError;
 use crate::{ByteString, Macaroon, MacaroonKey, Result};
 
+const MAX_CAVEATS: usize = 1000;
+
 pub struct MacaroonBuilder {
     identifier: ByteString,
     location: Option<String>,
@@ -35,8 +37,15 @@ impl MacaroonBuilder {
         self.signature.clone_from_slice(signature);
     }
 
-    pub fn add_caveat(&mut self, caveat: Caveat) {
+    pub fn add_caveat(&mut self, caveat: Caveat) -> Result<()> {
+        if self.caveats.len() >= MAX_CAVEATS {
+            return Err(MacaroonError::DeserializationError(format!(
+                "too many caveats (max {})",
+                MAX_CAVEATS
+            )));
+        }
         self.caveats.push(caveat);
+        Ok(())
     }
 
     pub fn build(&self) -> Result<Macaroon> {

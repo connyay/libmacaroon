@@ -3,6 +3,8 @@ use crate::{ByteString, Caveat, Macaroon, MacaroonError, MacaroonKey, Result};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
+const MAX_VERIFICATION_DEPTH: usize = 32;
+
 type GeneralVerifier = Box<dyn Fn(&[u8]) -> bool>;
 
 #[derive(Default)]
@@ -17,7 +19,7 @@ impl Verifier {
             .iter()
             .map(|d| (d.identifier.clone(), d.clone()))
             .collect::<HashMap<ByteString, Macaroon>>();
-        self.verify_with_sig(&m.signature, m, key, &mut discharge_set)?;
+        self.verify_with_sig(&m.signature, m, key, &mut discharge_set, 0)?;
         // Now check that all discharges were used
         if !discharge_set.is_empty() {
             return Err(MacaroonError::DischargeNotUsed);
@@ -31,14 +33,20 @@ impl Verifier {
         m: &Macaroon,
         key: &MacaroonKey,
         discharge_set: &mut HashMap<ByteString, Macaroon>,
+        depth: usize,
     ) -> Result<()> {
+        if depth > MAX_VERIFICATION_DEPTH {
+            return Err(MacaroonError::CaveatNotSatisfied(
+                "discharge verification exceeded maximum depth".to_string(),
+            ));
+        }
         let mut sig = crypto::hmac(key, m.identifier());
         for c in m.caveats() {
             sig = match c {
                 Caveat::ThirdParty(tp) => {
                     let caveat_key = crypto::decrypt_key(&sig, tp.verifier_id())?;
                     let dm = discharge_set.remove(tp.id()).ok_or_else(|| MacaroonError::CaveatNotSatisfied("no discharge macaroon found (or discharge has already been used) for third-party caveat".to_string()))?;
-                    self.verify_with_sig(root_sig, &dm, &caveat_key, discharge_set)?;
+                    self.verify_with_sig(root_sig, &dm, &caveat_key, discharge_set, depth + 1)?;
                     c.sign(&sig)
                 }
                 Caveat::FirstParty(fp) => {

@@ -171,7 +171,7 @@ impl Macaroon {
                     }
                 }
             };
-            builder.add_caveat(caveat_builder.build()?);
+            builder.add_caveat(caveat_builder.build()?)?;
             caveat_builder = CaveatBuilder::new();
         }
 
