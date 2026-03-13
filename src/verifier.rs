@@ -61,7 +61,7 @@ impl Verifier {
         // Check the bound signature equals the signature of the discharge
         // macaroon
         let zero_key: MacaroonKey = [0; 32].into();
-        let bound_sig = crypto::hmac2(&zero_key, &ByteString(root_sig.to_vec()), &sig.into());
+        let bound_sig = crypto::hmac2(&zero_key, root_sig, &sig);
         if bound_sig != m.signature {
             return Err(MacaroonError::InvalidSignature);
         }

@@ -73,41 +73,43 @@ struct Packet {
     value: Vec<u8>,
 }
 
-fn deserialize_as_packets(data: &[u8], mut packets: Vec<Packet>) -> Result<Vec<Packet>> {
-    if data.is_empty() {
-        return Ok(packets);
+fn deserialize_as_packets(data: &[u8]) -> Result<Vec<Packet>> {
+    let mut packets = Vec::new();
+    let mut remaining = data;
+    while !remaining.is_empty() {
+        if remaining.len() < 4 {
+            return Err(MacaroonError::DeserializationError(
+                "packet chunk too small to decode".to_string(),
+            ));
+        }
+        let hex: &str = str::from_utf8(&remaining[..4])?;
+        let size: usize = usize::from_str_radix(hex, 16)?;
+        if size > remaining.len() {
+            return Err(MacaroonError::DeserializationError(
+                "packet chunk size larger than token".to_string(),
+            ));
+        }
+        if size <= 4 {
+            return Err(MacaroonError::DeserializationError(
+                "packet chunk size too small".to_string(),
+            ));
+        }
+        let packet_data = &remaining[4..size];
+        let index = split_index(packet_data)?;
+        let (key_slice, value_slice) = packet_data.split_at(index);
+        if value_slice.len() < 2 {
+            return Err(MacaroonError::DeserializationError(
+                "packet value size too small".to_string(),
+            ));
+        }
+        packets.push(Packet {
+            key: String::from_utf8(key_slice.to_vec())?,
+            // skip beginning space and terminating \n
+            value: value_slice[1..value_slice.len() - 1].to_vec(),
+        });
+        remaining = &remaining[size..];
     }
-    if data.len() < 4 {
-        return Err(MacaroonError::DeserializationError(
-            "packet chunk too small to decode".to_string(),
-        ));
-    }
-    let hex: &str = str::from_utf8(&data[..4])?;
-    let size: usize = usize::from_str_radix(hex, 16)?;
-    if size > data.len() {
-        return Err(MacaroonError::DeserializationError(
-            "packet chunk size larger than token".to_string(),
-        ));
-    }
-    if size <= 4 {
-        return Err(MacaroonError::DeserializationError(
-            "packet chunk size too small".to_string(),
-        ));
-    }
-    let packet_data = &data[4..size];
-    let index = split_index(packet_data)?;
-    let (key_slice, value_slice) = packet_data.split_at(index);
-    if value_slice.len() < 2 {
-        return Err(MacaroonError::DeserializationError(
-            "packet value size too small".to_string(),
-        ));
-    }
-    packets.push(Packet {
-        key: String::from_utf8(key_slice.to_vec())?,
-        // skip beginning space and terminating \n
-        value: value_slice[1..value_slice.len() - 1].to_vec(),
-    });
-    deserialize_as_packets(&data[size..], packets)
+    Ok(packets)
 }
 
 fn split_index(packet: &[u8]) -> Result<usize> {
@@ -124,7 +126,7 @@ pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
     let data = data.to_vec();
     let mut builder: MacaroonBuilder = MacaroonBuilder::new();
     let mut caveat_builder: CaveatBuilder = CaveatBuilder::new();
-    for packet in deserialize_as_packets(data.as_slice(), Vec::new())? {
+    for packet in deserialize_as_packets(data.as_slice())? {
         match packet.key.as_str() {
             LOCATION => {
                 builder.set_location(&String::from_utf8(packet.value)?);

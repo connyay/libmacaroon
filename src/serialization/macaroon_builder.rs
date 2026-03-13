@@ -50,7 +50,7 @@ impl MacaroonBuilder {
         Ok(Macaroon {
             identifier: self.identifier.clone(),
             location: self.location.clone(),
-            signature: self.signature,
+            signature: self.signature.clone(),
             caveats: self.caveats.clone(),
         })
     }

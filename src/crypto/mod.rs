@@ -44,7 +44,7 @@ use zeroize::Zeroize;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Clone, Copy, Zeroize)]
+#[derive(Clone, Zeroize)]
 pub struct MacaroonKey([u8; 32]);
 
 impl std::fmt::Debug for MacaroonKey {

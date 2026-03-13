@@ -82,7 +82,10 @@ impl RustCryptoBackend {
         const TAG_SIZE: usize = 16;
 
         if raw_data.len() < NONCE_SIZE + TAG_SIZE {
-            error!("crypto::decrypt: Encrypted data {:?} too short", raw_data);
+            error!(
+                "crypto::decrypt: Encrypted data too short (len={})",
+                raw_data.len()
+            );
             return Err(MacaroonError::CryptoError("encrypted data too short"));
         }
 
@@ -105,8 +108,8 @@ impl RustCryptoBackend {
             }
             Err(_) => {
                 error!(
-                    "crypto::decrypt: Unknown decryption error decrypting {:?}",
-                    raw_data
+                    "crypto::decrypt: Decryption failed (data len={})",
+                    raw_data.len()
                 );
                 Err(MacaroonError::CryptoError("failed to decrypt ciphertext"))
             }
