@@ -32,3 +32,4 @@ zeroize = { version = "1.8", features = ["derive"] }
 [dev-dependencies]
 env_logger = "0.11"
 time = { version = "0.3.47", features = ["parsing"] }
+proptest = "1"

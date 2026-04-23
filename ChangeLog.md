@@ -43,6 +43,30 @@ Pre-release hardening pass. Several breaking API changes — see README's
   `Swatinem/rust-cache@v2`, separate jobs for `fmt`, `clippy -D warnings`,
   MSRV, WASM target, and `rustsec/audit-check`.
 
+**Correctness polish:**
+- V2JSON decoder rejects tokens whose top-level `v` field isn't `2`.
+- V1/V2 binary format sniff in `Macaroon::deserialize_binary` now accepts
+  only actual hex digits (`'0'..='9' | 'a'..='f' | 'A'..='F'`) as a V1
+  first byte, rather than any uppercase letter.
+- `Verifier::verify` rejects duplicate-identifier discharges explicitly
+  instead of silently de-duplicating on HashMap insertion.
+
+**API ergonomics (continued):**
+- `Caveat::as_first_party` / `Caveat::as_third_party` accessors added so
+  callers can skip the `match` when they already know or want to filter
+  for a specific caveat kind.
+- Example doctests in `lib.rs` and `README.md` rewritten in `?`-style
+  instead of `match { Err(e) => panic!(..) }`.
+
+**Testing:**
+- Property-based tests under `tests/proptest_roundtrip.rs` cover
+  round-trip of random macaroons through all three formats, correct-key
+  verification, wrong-key rejection, and "never panic on arbitrary input"
+  for the deserialization entry points.
+- `cargo-fuzz` scaffolding under `fuzz/` with targets for
+  `Macaroon::deserialize` and `Macaroon::deserialize_binary`. Out-of-band
+  (nightly only); see `fuzz/README.md`.
+
 Note: would increment to v0.4.0 if there are major changes.
 
 ## Version 0.3.0 - Oct 13, 2022 (macaroon)

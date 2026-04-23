@@ -1,0 +1,36 @@
+[package]
+name = "macaroon-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+macaroon = { path = ".." }
+
+# Each fuzz target is a separate binary. Run with e.g.:
+#   cargo +nightly fuzz run deserialize
+#   cargo +nightly fuzz run deserialize_binary
+#
+# Requires `cargo install cargo-fuzz` and a nightly toolchain.
+
+[[bin]]
+name = "deserialize"
+path = "fuzz_targets/deserialize.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "deserialize_binary"
+path = "fuzz_targets/deserialize_binary.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+# Keep cargo-fuzz out of the parent workspace so `cargo test` / `cargo
+# build` in the main crate don't try to pull it in on stable.

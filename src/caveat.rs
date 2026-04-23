@@ -48,6 +48,25 @@ impl Caveat {
             Self::ThirdParty(tp) => crypto::hmac2(key, &tp.verifier_id, &tp.id),
         }
     }
+
+    /// Returns the inner [`FirstParty`] if this is a first-party caveat.
+    ///
+    /// Lets callers skip an explicit `match` when they already know (or want
+    /// to filter for) the caveat kind.
+    pub fn as_first_party(&self) -> Option<&FirstParty> {
+        match self {
+            Self::FirstParty(fp) => Some(fp),
+            Self::ThirdParty(_) => None,
+        }
+    }
+
+    /// Returns the inner [`ThirdParty`] if this is a third-party caveat.
+    pub fn as_third_party(&self) -> Option<&ThirdParty> {
+        match self {
+            Self::ThirdParty(tp) => Some(tp),
+            Self::FirstParty(_) => None,
+        }
+    }
 }
 
 pub fn new_first_party(predicate: ByteString) -> Caveat {

@@ -20,10 +20,24 @@ pub struct Verifier {
 
 impl Verifier {
     pub fn verify(&self, m: &Macaroon, key: &MacaroonKey, discharges: &[Macaroon]) -> Result<()> {
-        let mut discharge_set = discharges
-            .iter()
-            .map(|d| (d.identifier.clone(), d.clone()))
-            .collect::<HashMap<ByteString, Macaroon>>();
+        // Reject duplicate-ID discharges explicitly rather than silently
+        // dropping one when collecting into a HashMap. A well-formed set of
+        // discharges has exactly one entry per third-party caveat ID; two
+        // entries with the same ID almost always indicates a caller bug
+        // (e.g., appending new discharges without de-duplicating), and
+        // letting it through silently could hide a stale discharge being
+        // used in place of a fresh one.
+        let mut discharge_set: HashMap<ByteString, Macaroon> =
+            HashMap::with_capacity(discharges.len());
+        for d in discharges {
+            if discharge_set.contains_key(&d.identifier) {
+                return Err(MacaroonError::CaveatNotSatisfied(format!(
+                    "duplicate discharge macaroons with identifier {:?}",
+                    String::from_utf8_lossy(&d.identifier.0)
+                )));
+            }
+            discharge_set.insert(d.identifier.clone(), d.clone());
+        }
         self.verify_with_sig(&m.signature, m, key, &mut discharge_set, 0)?;
         // Now check that all discharges were used
         if !discharge_set.is_empty() {
@@ -326,5 +340,34 @@ mod tests {
             verifier.verify(&macaroon, &root_key, &[]),
             Err(MacaroonError::CaveatNotSatisfied(_))
         ));
+    }
+
+    #[test]
+    fn test_duplicate_discharges_rejected() {
+        // Two discharge macaroons with the same identifier must be rejected
+        // rather than silently de-duplicated, so callers can't accidentally
+        // substitute a stale discharge for a fresh one.
+        let root_key = MacaroonKey::generate(b"root");
+        let cav_key = MacaroonKey::generate(b"caveat");
+        let mut mac =
+            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
+        mac.add_third_party_caveat("http://auth/", &cav_key, "other keyid")
+            .unwrap();
+
+        let mut d1 =
+            Macaroon::create(Some("http://auth/".into()), &cav_key, "other keyid").unwrap();
+        let mut d2 =
+            Macaroon::create(Some("http://auth/".into()), &cav_key, "other keyid").unwrap();
+        mac.bind(&mut d1);
+        mac.bind(&mut d2);
+
+        let verifier = Verifier::default();
+        let err = verifier.verify(&mac, &root_key, &[d1, d2]).unwrap_err();
+        match err {
+            MacaroonError::CaveatNotSatisfied(s) => {
+                assert!(s.contains("duplicate"), "unexpected message: {}", s);
+            }
+            other => panic!("expected CaveatNotSatisfied, got {:?}", other),
+        }
     }
 }

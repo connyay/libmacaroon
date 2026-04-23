@@ -77,6 +77,12 @@ impl Serialization {
 
 impl Macaroon {
     fn from_json(ser: Serialization) -> Result<Macaroon> {
+        if ser.v != 2 {
+            return Err(MacaroonError::DeserializationError(format!(
+                "Unsupported V2JSON version field: {} (expected 2)",
+                ser.v
+            )));
+        }
         if ser.i.is_some() && ser.i64.is_some() {
             return Err(MacaroonError::DeserializationError(String::from(
                 "Found i and i64 fields",
@@ -258,5 +264,25 @@ mod tests {
         let serialized = macaroon.serialize(Format::V2JSON).unwrap();
         let other = Macaroon::deserialize(&serialized).unwrap();
         assert_eq!(macaroon, other);
+    }
+
+    #[test]
+    fn test_reject_wrong_version() {
+        let bad =
+            r#"{"v":1,"i":"keyid","c":[],"s64":"S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw"}"#;
+        let err = Macaroon::deserialize(bad).unwrap_err();
+        assert!(matches!(err, crate::MacaroonError::DeserializationError(_)));
+    }
+
+    #[test]
+    fn test_reject_caveat_with_both_i_and_i64() {
+        let bad = r#"{"v":2,"i":"keyid","c":[{"i":"x","i64":"eA"}],"s64":"S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw"}"#;
+        let err = Macaroon::deserialize(bad).unwrap_err();
+        match err {
+            crate::MacaroonError::DeserializationError(s) => {
+                assert!(s.contains("i and i64"), "unexpected error: {}", s);
+            }
+            other => panic!("expected DeserializationError, got {:?}", other),
+        }
     }
 }

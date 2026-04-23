@@ -31,62 +31,43 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use macaroon::{Macaroon, Verifier, MacaroonKey};
 //!
-//! // Create our key
+//! // Create our key.
 //! let key = MacaroonKey::generate(b"key");
 //!
 //! // Create our macaroon. A location is optional.
-//! let mut macaroon = match Macaroon::create(Some("location".into()), &key, "id") {
-//!     Ok(macaroon) => macaroon,
-//!     Err(error) => panic!("Error creating macaroon: {:?}", error),
-//! };
+//! let mut macaroon = Macaroon::create(Some("location".into()), &key, "id")?;
 //!
-//! // Add our first-party caveat. We say that only someone with account 12345678
-//! // is authorized to access whatever the macaroon is protecting
-//! // Note that we can add however many of these we want, with different predicates
+//! // Add a first-party caveat: only someone identified as account 12345678
+//! // is authorized to use this macaroon. Multiple caveats with different
+//! // predicates can be layered on.
 //! macaroon.add_first_party_caveat("account = 12345678")?;
 //!
-//! // Now we verify the macaroon
-//! // First we create the verifier
+//! // Build a verifier with the predicates we're willing to accept.
 //! let mut verifier = Verifier::default();
-//!
-//! // We assert that the account number is "12345678"
 //! verifier.satisfy_exact("account = 12345678");
 //!
-//! // Now we verify the macaroon. It should return `Ok(true)` if the user is authorized
-//! match verifier.verify(&macaroon, &key, &[]) {
-//!     Ok(_) => println!("Macaroon verified!"),
-//!     Err(error) => println!("Error validating macaroon: {:?}", error),
-//! }
+//! // Verify. Returns Ok(()) on success.
+//! verifier.verify(&macaroon, &key, &[])?;
 //!
-//! // Now, let's add a third-party caveat, which just says that we need our third party
-//! // to authorize this for us as well.
-//!
-//! // Create a key for the third party caveat
+//! // Now a third-party caveat: verification requires a discharge macaroon
+//! // issued by a third party under a separate key.
 //! let other_key = MacaroonKey::generate(b"different key");
-//!
 //! macaroon.add_third_party_caveat("https://auth.mybank", &other_key, "caveat id")?;
 //!
-//! // When we're ready to verify a third-party caveat, we use the location
-//! // (in this case, "https://auth.mybank") to retrieve the discharge macaroons we use to verify.
-//! // These would be created by the third party like so:
-//! let mut discharge = match Macaroon::create(Some("http://auth.mybank/".into()),
-//!                                            &other_key,
-//!                                            "caveat id") {
-//!     Ok(discharge) => discharge,
-//!     Err(error) => panic!("Error creating discharge macaroon: {:?}", error),
-//! };
-//! // And this is the criterion the third party requires for authorization
+//! // The third party creates the discharge using the same caveat id and key.
+//! let mut discharge = Macaroon::create(
+//!     Some("http://auth.mybank/".into()),
+//!     &other_key,
+//!     "caveat id",
+//! )?;
 //! discharge.add_first_party_caveat("account = 12345678")?;
 //!
-//! // Once we receive the discharge macaroon, we bind it to the original macaroon
+//! // Bind the discharge to the original macaroon so it cannot be reused
+//! // against a different authorizing macaroon.
 //! macaroon.bind(&mut discharge);
 //!
-//! // Then we can verify using the same verifier (which will verify both the existing
-//! // first-party caveat and the third party one)
-//! match verifier.verify(&macaroon, &key, &[discharge]) {
-//!     Ok(_) => println!("Macaroon verified!"),
-//!     Err(error) => println!("Error validating macaroon: {:?}", error),
-//! }
+//! // Same verifier, now with the discharge supplied.
+//! verifier.verify(&macaroon, &key, &[discharge])?;
 //! # Ok(())
 //! # }
 //! ```
@@ -534,9 +515,14 @@ impl Macaroon {
                 "empty macaroon token".to_string(),
             ));
         }
+        // V2 binary starts with the literal version byte 0x02. V1 binary
+        // starts with a four-hex-digit packet length, so the first byte must
+        // be a hex digit (the previous `'A'..='Z'` range accidentally
+        // accepted non-hex letters, which the parser would then reject with
+        // a less informative error).
         let mac: Macaroon = match token[0] as char {
             '\x02' => serialization::v2::deserialize(token)?,
-            'a'..='f' | 'A'..='Z' | '0'..='9' => serialization::v1::deserialize(token)?,
+            '0'..='9' | 'a'..='f' | 'A'..='F' => serialization::v1::deserialize(token)?,
             _ => {
                 return Err(MacaroonError::DeserializationError(
                     "unknown macaroon serialization format".to_string(),

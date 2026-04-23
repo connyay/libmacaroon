@@ -10,7 +10,40 @@ Rust implementation of
 [![codecov](https://codecov.io/gh/macaroon-rs/macaroon/branch/main/graph/badge.svg)](https://codecov.io/gh/macaroon-rs/macaroon)
 [![Docs.rs](https://docs.rs/macaroon/badge.svg)](https://docs.rs/macaroon)
 
-NOTE: THIS LIBRARY SHOULD NOT BE CONSIDERED SECURE AND HENCE SHOULD NOT BE USED IN PRODUCTION UNTIL IT PASSES A FULL SECURITY AUDIT. THE API IS ALSO LIKELY TO HAVE BREAKING CHANGES BETWEEN 0.X MINOR VERSIONS AND SHOULD THEREFORE NOT BE CONSIDERED STABLE.
+## Status
+
+**Pre-1.0; no external formal security audit.** The API is expected to
+break between `0.x` minor versions until we've shaken it out against
+real-world use.
+
+What *has* been done:
+
+- Pure-Rust crypto stack: HMAC-SHA256 via the RustCrypto `hmac`/`sha2`
+  crates, XSalsa20-Poly1305 via `crypto_secretbox`. No FFI, no C
+  dependencies, no `unsafe`.
+- Constant-time signature comparison (`subtle::ConstantTimeEq`), key
+  zeroization on drop (`ZeroizeOnDrop`), redacted `Debug`, no `Deref`
+  into key bytes — `MacaroonKey` is hard to accidentally leak.
+- DoS caps on every input dimension: caveat count (`MAX_CAVEATS = 1000`),
+  field size (`MAX_FIELD_SIZE_BYTES = 65535`), verification recursion
+  depth (32). Applied symmetrically on construction and deserialization.
+- Fallible RNG path: WASM environments without
+  `crypto.getRandomValues` surface `MacaroonError::RngError` instead of
+  aborting the module.
+- Interop test vectors from libmacaroons, pymacaroons, and the Go
+  `macarooncompat` project. First- and third-party signatures match
+  byte-for-byte where the compared implementations permit deterministic
+  nonces.
+- Property tests over the full serialization matrix (V1 / V2 / V2JSON
+  round-trip, verification, wrong-key rejection) plus fuzz harness under
+  `fuzz/` for both deserialization entry points.
+- `cargo audit` clean; CI runs fmt, clippy `-D warnings`, test, MSRV,
+  WASM target, and audit on every PR.
+
+What *has not* been done:
+
+- External formal audit. If you're considering this crate for a security
+  boundary, please budget for one.
 
 ## What are Macaroons?
 
@@ -55,65 +88,46 @@ the above process.
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 use macaroon::{Macaroon, Verifier, MacaroonKey};
 
-// Create our key
+// Create a key. `generate` derives via HMAC from any byte string; for a
+// fresh random key use `MacaroonKey::generate_random()?`.
 let key = MacaroonKey::generate(b"key");
 
-// Create our macaroon. A location is optional.
-// The identifier accepts any type that implements AsRef<[u8]>.
-let mut macaroon = match Macaroon::create(Some("location".into()), &key, "id") {
-    Ok(macaroon) => macaroon,
-    Err(error) => panic!("Error creating macaroon: {:?}", error),
-};
+// Create a macaroon. Location is optional; identifier accepts any
+// `AsRef<[u8]>`.
+let mut macaroon = Macaroon::create(Some("location".into()), &key, "id")?;
 
-// Add our first-party caveat. We say that only someone with account 12345678
-// is authorized to access whatever the macaroon is protecting.
-// Note that we can add however many of these we want, with different predicates.
-// Predicates accept any type that implements AsRef<[u8]>.
+// Add a first-party caveat — an opaque predicate that the verifier will
+// match. Predicates accept any `AsRef<[u8]>`. Add as many as you want.
 macaroon.add_first_party_caveat("account = 12345678")?;
 
-// Now we verify the macaroon
-// First we create the verifier
+// Build a verifier with the predicates we're willing to accept, then verify.
+// Returns `Ok(())` when every caveat is satisfied and the signature chain
+// matches. Discharges are passed as a borrowed slice.
 let mut verifier = Verifier::default();
-
-// We assert that the account number is "12345678"
 verifier.satisfy_exact("account = 12345678");
+verifier.verify(&macaroon, &key, &[])?;
 
-// Now we verify the macaroon. It should return Ok(()) if the user is authorized.
-// Discharges are passed as a borrowed slice.
-match verifier.verify(&macaroon, &key, &[]) {
-    Ok(_) => println!("Macaroon verified!"),
-    Err(error) => println!("Error validating macaroon: {:?}", error),
-}
-
-// Now, let's add a third-party caveat, which just says that we need our third party
-// to authorize this for us as well.
-
-// Create a key for the third party caveat
+// Add a third-party caveat. This binds the macaroon to an external
+// authorization that will be represented by a discharge macaroon issued
+// under `other_key`.
 let other_key = MacaroonKey::generate(b"different key");
-
 macaroon.add_third_party_caveat("https://auth.mybank", &other_key, "caveat id")?;
 
-// When we're ready to verify a third-party caveat, we use the location
-// (in this case, "https://auth.mybank") to retrieve the discharge macaroons we use to verify.
-// These would be created by the third party like so:
-let mut discharge = match Macaroon::create(Some("http://auth.mybank/".into()),
-                                           &other_key,
-                                           "caveat id") {
-    Ok(discharge) => discharge,
-    Err(error) => panic!("Error creating discharge macaroon: {:?}", error),
-};
-// And this is the criterion the third party requires for authorization
+// The third party issues the discharge using the same caveat id and the
+// caveat key. They can also attach further caveats to the discharge.
+let mut discharge = Macaroon::create(
+    Some("http://auth.mybank/".into()),
+    &other_key,
+    "caveat id",
+)?;
 discharge.add_first_party_caveat("account = 12345678")?;
 
-// Once we receive the discharge macaroon, we bind it to the original macaroon
+// Bind the discharge to the original macaroon so it cannot be reused
+// against a different authorizing macaroon.
 macaroon.bind(&mut discharge);
 
-// Then we can verify using the same verifier (which will verify both the existing
-// first-party caveat and the third party one)
-match verifier.verify(&macaroon, &key, &[discharge]) {
-    Ok(_) => println!("Macaroon verified!"),
-    Err(error) => println!("Error validating macaroon: {:?}", error),
-}
+// Same verifier, now with the discharge supplied.
+verifier.verify(&macaroon, &key, &[discharge])?;
 # Ok(())
 # }
 ```
