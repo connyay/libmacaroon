@@ -66,9 +66,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
+      - uses: dtolnay/rust-toolchain@stable
+      # Scope the cache to the audit job so it doesn't collide with
+      # test/clippy caches. Caches the cargo-audit binary + advisory DB
+      # + registry index — scan results are never cached, so no
+      # staleness risk for new advisories.
+      - uses: Swatinem/rust-cache@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          shared-key: audit
+          cache-directories: |
+            ~/.cargo/advisory-db
+      # Installs a pre-built cargo-audit binary (few seconds) instead of
+      # compiling from source (~2 min like `rustsec/audit-check` does).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - run: cargo audit --deny warnings
 
   # Publishes to crates.io when a `v*.*.*` tag is pushed. Gated on every
   # other job passing so a green tag build is required to ship.
