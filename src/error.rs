@@ -29,6 +29,11 @@ pub enum MacaroonError {
     /// Arises when verifying a [`Macaroon`](crate::Macaroon), and the signature does not match
     /// what is expected. Indicates a failure to authenticate the macaroon.
     InvalidSignature,
+
+    /// Arises when adding a caveat to a [`Macaroon`](crate::Macaroon), or when
+    /// deserializing a token, would exceed the maximum allowed number of
+    /// caveats. Protects against memory exhaustion from pathological inputs.
+    TooManyCaveats,
 }
 
 impl From<serde_json::Error> for MacaroonError {
@@ -92,6 +97,11 @@ impl std::fmt::Display for MacaroonError {
             MacaroonError::InvalidSignature => write!(
                 f,
                 "Macaroon failed to verify because signature did not match"
+            ),
+            MacaroonError::TooManyCaveats => write!(
+                f,
+                "Macaroon exceeds the maximum allowed number of caveats ({})",
+                crate::MAX_CAVEATS
             ),
         }
     }

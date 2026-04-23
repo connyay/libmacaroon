@@ -38,7 +38,7 @@ fn libmacaroons_one_caveat() {
         "we used our secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("account = 3735928559");
+    mac.add_first_party_caveat("account = 3735928559").unwrap();
     // expectSignature: "1efe4763f290dbce0c1d08477367e11f4eee456a64933cf662d79772dbb82128"
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
@@ -56,8 +56,9 @@ fn libmacaroons_two_caveats() {
         "we used our secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("account = 3735928559");
-    mac.add_first_party_caveat("time < 2015-01-01T00:00");
+    mac.add_first_party_caveat("account = 3735928559").unwrap();
+    mac.add_first_party_caveat("time < 2015-01-01T00:00")
+        .unwrap();
     // expectSignature: "696665d0229f9f801b588bb3f68bbdb806b26d1fbcd40ca22d9017bce4a075f1"
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
@@ -75,9 +76,11 @@ fn libmacaroons_three_caveats() {
         "we used our secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("account = 3735928559");
-    mac.add_first_party_caveat("time < 2015-01-01T00:00");
-    mac.add_first_party_caveat("email = alice@example.org");
+    mac.add_first_party_caveat("account = 3735928559").unwrap();
+    mac.add_first_party_caveat("time < 2015-01-01T00:00")
+        .unwrap();
+    mac.add_first_party_caveat("email = alice@example.org")
+        .unwrap();
     // expectSignature: "882e6d59496ed5245edb7ab5b8839ecd63e5d504e54839804f164070d8eed952"
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
@@ -97,7 +100,7 @@ fn libmacaroons_one_caveat_second() {
         "we used our other secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("account = 3735928559");
+    mac.add_first_party_caveat("account = 3735928559").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
         "1434e674ad84fdfdc9bc1aa00785325c8b6d57341fc7ce200ba4680c80786dda"

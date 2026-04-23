@@ -8,9 +8,9 @@ pub(crate) mod rustcrypto;
 use crate::Result;
 use rustcrypto::RustCryptoBackend;
 use std::borrow::Borrow;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use subtle::ConstantTimeEq;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Secret cryptographic key used to sign and verify Macaroons.
 ///
@@ -19,8 +19,9 @@ use zeroize::Zeroize;
 /// bytes; generated randomly; or generated via an HMAC from a byte string of any length. For
 /// security, keys should be generated using at least 32 bytes of entropy, and stored securely.
 ///
-/// Key material is zeroized on drop and compared in constant time to prevent
-/// timing side-channel attacks. The `Debug` implementation is redacted.
+/// Key material is zeroized on drop (`ZeroizeOnDrop`) and compared in constant
+/// time (`ConstantTimeEq`) to prevent timing side-channel attacks. The `Debug`
+/// implementation is redacted.
 ///
 /// ## Creation
 ///
@@ -29,7 +30,7 @@ use zeroize::Zeroize;
 /// #
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// use macaroon::MacaroonKey;
-/// extern crate base64;
+/// use base64::{engine::general_purpose::STANDARD, Engine as _};
 ///
 /// // generate a new random key from scratch
 /// let fresh_key = MacaroonKey::generate_random();
@@ -39,12 +40,12 @@ use zeroize::Zeroize;
 ///
 /// // import a base64-encoded key (eg, from a secrets vault)
 /// let mut key_bytes: [u8; 32] = [0; 32];
-/// key_bytes.copy_from_slice(&base64::decode("zV/IaqNgsWe2c22J5ilLY/d9DbxEir2z1bYBrzBemsM=")?);
+/// key_bytes.copy_from_slice(&STANDARD.decode("zV/IaqNgsWe2c22J5ilLY/d9DbxEir2z1bYBrzBemsM=")?);
 /// let secret_key: MacaroonKey = key_bytes.into();
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Clone, Zeroize)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct MacaroonKey([u8; 32]);
 
 impl std::fmt::Debug for MacaroonKey {
@@ -87,12 +88,6 @@ impl Deref for MacaroonKey {
     }
 }
 
-impl DerefMut for MacaroonKey {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 impl From<[u8; 32]> for MacaroonKey {
     /// Uses bytes directly as a MacaroonKey (with no HMAC)
     fn from(b: [u8; 32]) -> Self {
@@ -132,14 +127,15 @@ impl MacaroonKey {
         generate_derived_key(seed)
     }
 
-    /// Convert to Vec<u8>
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
-    }
-
     /// Check if key is empty (all zeros)
     pub fn is_empty(&self) -> bool {
         self.0.iter().all(|&b| b == 0)
+    }
+
+    /// Overwrite the key bytes in place. Crate-internal; prevents external
+    /// callers from mutating an existing key via a safe API.
+    pub(crate) fn copy_from_slice(&mut self, bytes: &[u8]) {
+        self.0.copy_from_slice(bytes);
     }
 }
 

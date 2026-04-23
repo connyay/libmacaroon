@@ -2,7 +2,8 @@ use crate::caveat;
 use crate::caveat::CaveatBuilder;
 use crate::error::MacaroonError;
 use crate::serialization::macaroon_builder::MacaroonBuilder;
-use crate::{ByteString, Macaroon, Result};
+use crate::{ByteString, Macaroon, Result, URL_SAFE};
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::str;
@@ -39,10 +40,7 @@ impl Serialization {
             l64: None,
             c: Vec::new(),
             s: None,
-            s64: Some(base64::encode_config(
-                macaroon.signature(),
-                base64::URL_SAFE,
-            )),
+            s64: Some(URL_SAFE.encode(macaroon.signature())),
         };
         for c in macaroon.caveats() {
             match c {
@@ -111,10 +109,7 @@ impl Macaroon {
             Some(loc) => builder.set_location(&loc),
             None => {
                 if let Some(loc) = ser.l64 {
-                    builder.set_location(&String::from_utf8(base64::decode_config(
-                        &loc,
-                        base64::URL_SAFE,
-                    )?)?)
+                    builder.set_location(&String::from_utf8(URL_SAFE.decode(&loc)?)?)
                 }
             }
         };
@@ -122,7 +117,7 @@ impl Macaroon {
         let raw_sig = match ser.s {
             Some(sig) => sig,
             None => match ser.s64 {
-                Some(sig) => base64::decode_config(&sig, base64::URL_SAFE)?,
+                Some(sig) => URL_SAFE.decode(&sig)?,
                 None => {
                     return Err(MacaroonError::DeserializationError(
                         "No signature found".into(),
@@ -156,10 +151,7 @@ impl Macaroon {
                 Some(loc) => caveat_builder.add_location(loc),
                 None => {
                     if let Some(loc64) = c.l64 {
-                        caveat_builder.add_location(String::from_utf8(base64::decode_config(
-                            &loc64,
-                            base64::URL_SAFE,
-                        )?)?)
+                        caveat_builder.add_location(String::from_utf8(URL_SAFE.decode(&loc64)?)?)
                     }
                 }
             };
@@ -231,12 +223,14 @@ mod tests {
             "keyid",
         )
         .unwrap();
-        macaroon.add_first_party_caveat("user = alice");
-        macaroon.add_third_party_caveat(
-            "https://auth.mybank.com/",
-            &MacaroonKey::generate(b"my key"),
-            "keyid",
-        );
+        macaroon.add_first_party_caveat("user = alice").unwrap();
+        macaroon
+            .add_third_party_caveat(
+                "https://auth.mybank.com/",
+                &MacaroonKey::generate(b"my key"),
+                "keyid",
+            )
+            .unwrap();
         let serialized = macaroon.serialize(Format::V2JSON).unwrap();
         let other = Macaroon::deserialize(&serialized).unwrap();
         assert_eq!(macaroon, other);

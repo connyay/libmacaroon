@@ -42,7 +42,7 @@ impl ThirdParty {
 }
 
 impl Caveat {
-    pub fn sign(&self, key: &MacaroonKey) -> MacaroonKey {
+    pub(crate) fn sign(&self, key: &MacaroonKey) -> MacaroonKey {
         match self {
             Self::FirstParty(fp) => crypto::hmac(key, &fp.predicate),
             Self::ThirdParty(tp) => crypto::hmac2(key, &tp.verifier_id, &tp.id),

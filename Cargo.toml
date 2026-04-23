@@ -19,7 +19,7 @@ wasm = ["getrandom/js"]
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-base64 = "0.13"
+base64 = "0.22"
 
 # Crypto (RustCrypto ecosystem — pure Rust, WASM-compatible)
 hmac = "0.12"
@@ -28,8 +28,8 @@ xsalsa20poly1305 = "0.9"
 rand = "0.8"
 getrandom = "0.2"
 subtle = "2.6"
-zeroize = { version = "1.6", features = ["derive"] }
+zeroize = { version = "1.8", features = ["derive"] }
 
 [dev-dependencies]
-env_logger = "0.9"
+env_logger = "0.11"
 time = { version = "0.3", features = ["parsing"] }

@@ -1,8 +1,21 @@
 // Examples from libmacaroons reference implementation README:
 // https://github.com/rescrv/libmacaroons
 
-use base64;
+use base64::{
+    alphabet,
+    engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
+    Engine as _,
+};
 use macaroon::{Caveat, Format, Macaroon, MacaroonKey, Verifier};
+
+const STANDARD: GeneralPurpose = GeneralPurpose::new(
+    &alphabet::STANDARD,
+    GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
+const URL_SAFE: GeneralPurpose = GeneralPurpose::new(
+    &alphabet::URL_SAFE,
+    GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
 
 fn bytes_to_hex(bytes: &[u8]) -> String {
     bytes
@@ -31,8 +44,7 @@ fn creating_macaroons() {
     );
 
     let b64_standard = "MDAxY2xvY2F0aW9uIGh0dHA6Ly9teWJhbmsvCjAwMjZpZGVudGlmaWVyIHdlIHVzZWQgb3VyIHNlY3JldCBrZXkKMDAyZnNpZ25hdHVyZSDj2eApCFJsTAA5rhURQRXZf91ovyujebNCqvD2F9BVLwo";
-    let b64_url_safe =
-        base64::encode_config(base64::decode(b64_standard).unwrap(), base64::URL_SAFE);
+    let b64_url_safe = URL_SAFE.encode(STANDARD.decode(b64_standard).unwrap());
     assert_eq!(mac.serialize(Format::V1).unwrap(), b64_url_safe);
 }
 
@@ -45,19 +57,21 @@ fn adding_caveats() {
         "we used our secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("account = 3735928559");
+    mac.add_first_party_caveat("account = 3735928559").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
         "1efe4763f290dbce0c1d08477367e11f4eee456a64933cf662d79772dbb82128"
     );
 
-    mac.add_first_party_caveat("time < 2020-01-01T00:00");
+    mac.add_first_party_caveat("time < 2020-01-01T00:00")
+        .unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
         "b5f06c8c8ef92f6c82c6ff282cd1f8bd1849301d09a2db634ba182536a611c49"
     );
 
-    mac.add_first_party_caveat("email = alice@example.org");
+    mac.add_first_party_caveat("email = alice@example.org")
+        .unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
         "ddf553e46083e55b8d71ab822be3d8fcf21d6bf19c40d617bb9fb438934474b6"
@@ -103,9 +117,11 @@ fn verifying_macaroons() {
         "we used our secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("account = 3735928559");
-    mac.add_first_party_caveat("time < 2020-01-01T00:00");
-    mac.add_first_party_caveat("email = alice@example.org");
+    mac.add_first_party_caveat("account = 3735928559").unwrap();
+    mac.add_first_party_caveat("time < 2020-01-01T00:00")
+        .unwrap();
+    mac.add_first_party_caveat("email = alice@example.org")
+        .unwrap();
 
     let mut ver = Verifier::default();
     assert!(ver.verify(&mac, &key, &[]).is_err());
@@ -120,12 +136,14 @@ fn verifying_macaroons() {
 
     // additional caveat which we are prepared for
     let mut mac_action = mac.clone();
-    mac_action.add_first_party_caveat("action = deposit");
+    mac_action
+        .add_first_party_caveat("action = deposit")
+        .unwrap();
     assert!(ver.verify(&mac_action, &key, &[]).is_ok());
 
     // additional caveat which we are not prepared for
     let mut mac_os = mac.clone();
-    mac_os.add_first_party_caveat("OS = Windows XP");
+    mac_os.add_first_party_caveat("OS = Windows XP").unwrap();
     assert!(ver.verify(&mac_os, &key, &[]).is_err());
 
     // wrong secret key used in verification
@@ -153,7 +171,7 @@ fn third_party_macaroons() {
         "we used our other secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("account = 3735928559");
+    mac.add_first_party_caveat("account = 3735928559").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
         "1434e674ad84fdfdc9bc1aa00785325c8b6d57341fc7ce200ba4680c80786dda"
@@ -164,7 +182,8 @@ fn third_party_macaroons() {
         "http://auth.mybank/",
         &caveat_key,
         "this was how we remind auth of key/pred",
-    );
+    )
+    .unwrap();
     // In the example, libsodium none generation is overriden, so the verifier_id is always the
     // same:
     // "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA027FAuBYhtHwJ58FX6UlVNFtFsGxQHS7uD_w_dedwv4Jjw7UorCREw5rXbRqIKhr"
@@ -176,7 +195,7 @@ fn third_party_macaroons() {
             assert_eq!(tp.id(), b"this was how we remind auth of key/pred");
             /*
             assert_eq!(tp.verifier_id(),
-                base64::decode_config("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA027FAuBYhtHwJ58FX6UlVNFtFsGxQHS7uD_w_dedwv4Jjw7UorCREw5rXbRqIKhr", base64::URL_SAFE).unwrap().into(),
+                URL_SAFE.decode("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA027FAuBYhtHwJ58FX6UlVNFtFsGxQHS7uD_w_dedwv4Jjw7UorCREw5rXbRqIKhr").unwrap().into(),
             );
             */
         }
@@ -194,7 +213,9 @@ fn third_party_macaroons() {
         "this was how we remind auth of key/pred",
     )
     .unwrap();
-    discharge_mac.add_first_party_caveat("time < 2020-01-01T00:00");
+    discharge_mac
+        .add_first_party_caveat("time < 2020-01-01T00:00")
+        .unwrap();
     assert_eq!(
         bytes_to_hex(discharge_mac.signature().as_ref()),
         "2ed1049876e9d5840950274b579b0770317df54d338d9d3039c7c67d0d91d63c"

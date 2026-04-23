@@ -19,8 +19,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Macaroon::create(Some("https://example.com/".into()), &key, "demo-macaroon")?;
 
     // Add some caveats
-    macaroon.add_first_party_caveat("user = alice");
-    macaroon.add_first_party_caveat("action = read");
+    macaroon.add_first_party_caveat("user = alice")?;
+    macaroon.add_first_party_caveat("action = read")?;
 
     println!("Macaroon created with {} caveats", macaroon.caveats().len());
 
@@ -46,7 +46,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nTesting third-party caveat (encryption/decryption)...");
     let caveat_key = MacaroonKey::generate(b"caveat-key");
     let mut macaroon_with_3p = macaroon.clone();
-    macaroon_with_3p.add_third_party_caveat("https://auth.example.com", &caveat_key, "caveat-id");
+    macaroon_with_3p.add_third_party_caveat(
+        "https://auth.example.com",
+        &caveat_key,
+        "caveat-id",
+    )?;
 
     println!("✅ Third-party caveat added successfully (encryption worked)");
 
@@ -56,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &caveat_key,
         "caveat-id",
     )?;
-    discharge.add_first_party_caveat("time < 2025-12-31");
+    discharge.add_first_party_caveat("time < 2025-12-31")?;
 
     // Bind the discharge
     macaroon_with_3p.bind(&mut discharge);

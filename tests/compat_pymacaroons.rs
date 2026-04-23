@@ -1,6 +1,19 @@
-use base64;
 /// https://github.com/ecordell/pymacaroons/blob/master/tests/functional_tests/functional_tests.py
+use base64::{
+    alphabet,
+    engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
+    Engine as _,
+};
 use macaroon::{Format, Macaroon, MacaroonError, MacaroonKey};
+
+const STANDARD: GeneralPurpose = GeneralPurpose::new(
+    &alphabet::STANDARD,
+    GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
+const URL_SAFE: GeneralPurpose = GeneralPurpose::new(
+    &alphabet::URL_SAFE,
+    GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
 
 fn bytes_to_hex(bytes: &[u8]) -> String {
     bytes
@@ -35,7 +48,7 @@ fn test_first_party_caveat() {
         "we used our secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("test = caveat");
+    mac.add_first_party_caveat("test = caveat").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
         "197bac7a044af33332865b9266e26d493bdd668a660e44d88ce1a998c23dbd67"
@@ -51,10 +64,9 @@ fn test_serializing() {
         "we used our secret key",
     )
     .unwrap();
-    mac.add_first_party_caveat("test = caveat");
+    mac.add_first_party_caveat("test = caveat").unwrap();
     let b64_standard = "MDAxY2xvY2F0aW9uIGh0dHA6Ly9teWJhbmsvCjAwMjZpZGVudGlmaWVyIHdlIHVzZWQgb3VyIHNlY3JldCBrZXkKMDAxNmNpZCB0ZXN0ID0gY2F2ZWF0CjAwMmZzaWduYXR1cmUgGXusegRK8zMyhluSZuJtSTvdZopmDkTYjOGpmMI9vWcK";
-    let b64_url_safe =
-        base64::encode_config(base64::decode(b64_standard).unwrap(), base64::URL_SAFE);
+    let b64_url_safe = URL_SAFE.encode(STANDARD.decode(b64_standard).unwrap());
     assert_eq!(mac.serialize(Format::V1).unwrap(), b64_url_safe);
 
     let after_v1 = Macaroon::deserialize(mac.serialize(Format::V1).unwrap()).unwrap();
@@ -68,10 +80,12 @@ fn test_serializing() {
 #[test]
 fn test_serializing_binary_id() {
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let identifier = base64::decode("AK2o+q0Aq9+bONkXw7ky7HAuhCLO9hhaMMc").unwrap();
+    let identifier = STANDARD
+        .decode("AK2o+q0Aq9+bONkXw7ky7HAuhCLO9hhaMMc")
+        .unwrap();
     let mut mac =
         Macaroon::create(Some("http://mybank/".into()), &root_key, identifier.clone()).unwrap();
-    mac.add_first_party_caveat("test = caveat");
+    mac.add_first_party_caveat("test = caveat").unwrap();
 
     let after_v1 = Macaroon::deserialize(mac.serialize(Format::V1).unwrap()).unwrap();
     let after_v2 = Macaroon::deserialize(mac.serialize(Format::V2).unwrap()).unwrap();
@@ -106,7 +120,7 @@ fn test_deserializing_invalid() {
 fn test_serializing_max_length_packet() {
     let root_key = MacaroonKey::generate(b"blah");
     let mut mac = Macaroon::create(Some("test".into()), &root_key, "secret").unwrap();
-    mac.add_first_party_caveat(vec![b'x'; 65526]);
+    mac.add_first_party_caveat(vec![b'x'; 65526]).unwrap();
     assert!(mac.serialize(Format::V2).is_ok());
 }
 
@@ -114,7 +128,7 @@ fn test_serializing_max_length_packet() {
 fn test_serializing_too_long_packet() {
     let root_key = MacaroonKey::generate(b"blah");
     let mut mac = Macaroon::create(Some("test".into()), &root_key, "secret").unwrap();
-    mac.add_first_party_caveat(vec![b'x'; 65527]);
+    mac.add_first_party_caveat(vec![b'x'; 65527]).unwrap();
     // TODO: implement a max size check
     //assert!(mac.serialize(Format::V2).is_err());
 }

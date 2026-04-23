@@ -52,6 +52,7 @@ the above process.
 ### Examples
 
 ```rust
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
 use macaroon::{Macaroon, Verifier, MacaroonKey};
 
 // Create our key
@@ -68,7 +69,7 @@ let mut macaroon = match Macaroon::create(Some("location".into()), &key, "id") {
 // is authorized to access whatever the macaroon is protecting.
 // Note that we can add however many of these we want, with different predicates.
 // Predicates accept any type that implements AsRef<[u8]>.
-macaroon.add_first_party_caveat("account = 12345678");
+macaroon.add_first_party_caveat("account = 12345678")?;
 
 // Now we verify the macaroon
 // First we create the verifier
@@ -90,7 +91,7 @@ match verifier.verify(&macaroon, &key, &[]) {
 // Create a key for the third party caveat
 let other_key = MacaroonKey::generate(b"different key");
 
-macaroon.add_third_party_caveat("https://auth.mybank", &other_key, "caveat id");
+macaroon.add_third_party_caveat("https://auth.mybank", &other_key, "caveat id")?;
 
 // When we're ready to verify a third-party caveat, we use the location
 // (in this case, "https://auth.mybank") to retrieve the discharge macaroons we use to verify.
@@ -102,7 +103,7 @@ let mut discharge = match Macaroon::create(Some("http://auth.mybank/".into()),
     Err(error) => panic!("Error creating discharge macaroon: {:?}", error),
 };
 // And this is the criterion the third party requires for authorization
-discharge.add_first_party_caveat("account = 12345678");
+discharge.add_first_party_caveat("account = 12345678")?;
 
 // Once we receive the discharge macaroon, we bind it to the original macaroon
 macaroon.bind(&mut discharge);
@@ -113,6 +114,8 @@ match verifier.verify(&macaroon, &key, &[discharge]) {
     Ok(_) => println!("Macaroon verified!"),
     Err(error) => println!("Error validating macaroon: {:?}", error),
 }
+# Ok(())
+# }
 ```
 
 ## API Changes (0.3.x)
@@ -123,9 +126,10 @@ This version includes several breaking changes from 0.2.x:
   The cryptographic backend is now pure Rust and thread-safe by default.
 - **`ByteString` removed from public API** — All public methods now use `&[u8]`,
   `&str`, or `impl AsRef<[u8]>` instead of `ByteString`.
-- **`MacaroonKey`** — Now uses `Zeroize` on drop and constant-time equality. No
-  longer implements `Copy` (use `.clone()` for explicit copies). Debug output is
-  redacted. New constructors: `MacaroonKey::generate_random()` and
+- **`MacaroonKey`** — Now uses `ZeroizeOnDrop` to clear key material on drop,
+  constant-time equality (`ConstantTimeEq`), and a redacted `Debug` impl. No
+  longer implements `Copy` or `DerefMut` (use `.clone()` for explicit copies).
+  New constructors: `MacaroonKey::generate_random()` and
   `MacaroonKey::generate(seed)`.
 - **`Macaroon` accessor changes:**
   - `identifier()` returns `&[u8]` (was `ByteString`)
@@ -135,7 +139,11 @@ This version includes several breaking changes from 0.2.x:
   - `first_party_caveats()` / `third_party_caveats()` return `Vec<&Caveat>` (was `Vec<Caveat>`)
 - **`Macaroon::create()`** — Identifier parameter now accepts `impl AsRef<[u8]>` (was `ByteString`).
 - **`add_first_party_caveat()`** — Predicate now accepts `impl AsRef<[u8]>` (was `ByteString`).
+  Now returns `Result<()>` and fails with `MacaroonError::TooManyCaveats` if the
+  per-macaroon caveat cap (1000) is exceeded.
 - **`add_third_party_caveat()`** — ID now accepts `impl AsRef<[u8]>` (was `ByteString`).
+  Now returns `Result<()>` and fails with `MacaroonError::TooManyCaveats` if the
+  per-macaroon caveat cap (1000) is exceeded.
 - **`Verifier::verify()`** — Discharges parameter is now `&[Macaroon]` (was `Vec<Macaroon>`).
 - **`Verifier::satisfy_exact()`** — Now accepts `impl AsRef<[u8]>` (was `ByteString`).
 - **`Verifier::satisfy_general()`** — Now accepts closures (`Fn(&[u8]) -> bool`)

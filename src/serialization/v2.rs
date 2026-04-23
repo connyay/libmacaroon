@@ -1,7 +1,8 @@
 use crate::caveat::{Caveat, CaveatBuilder};
 use crate::error::MacaroonError;
 use crate::serialization::macaroon_builder::MacaroonBuilder;
-use crate::{ByteString, Macaroon, Result};
+use crate::{ByteString, Macaroon, Result, MAX_FIELD_SIZE_BYTES, URL_SAFE};
+use base64::Engine as _;
 
 // Version 2 fields
 const EOS: u8 = 0;
@@ -11,7 +12,6 @@ const VID: u8 = 4;
 const SIGNATURE: u8 = 6;
 
 const VARINT_PACK_SIZE: usize = 128;
-const MAX_FIELD_SIZE_BYTES: usize = 65535;
 
 fn varint_size(size: usize) -> Vec<u8> {
     let mut buffer: Vec<u8> = Vec::new();
@@ -59,7 +59,7 @@ pub fn serialize_binary(macaroon: &Macaroon) -> Result<Vec<u8>> {
 
 pub fn serialize(macaroon: &Macaroon) -> Result<String> {
     let buf = serialize_binary(macaroon)?;
-    Ok(base64::encode_config(&buf, base64::URL_SAFE))
+    Ok(URL_SAFE.encode(&buf))
 }
 
 struct Deserializer<'r> {
@@ -244,7 +244,8 @@ mod tests {
     use crate::caveat;
     use crate::caveat::Caveat;
     use crate::serialization::macaroon_builder::MacaroonBuilder;
-    use crate::{Macaroon, MacaroonKey};
+    use crate::{Macaroon, MacaroonKey, URL_SAFE};
+    use base64::Engine as _;
 
     #[test]
     fn test_deserialize() {
@@ -253,7 +254,7 @@ mod tests {
             75, 233, 103, 205, 30, 160, 198, 178, 107, 175, 106, 74, 148, 238, 155, 5, 177, 88,
             134, 218, 11, 168, 94, 140, 66, 169, 60, 141, 14, 18, 94, 252,
         ];
-        let serialized: Vec<u8> = base64::decode_config(SERIALIZED, base64::URL_SAFE).unwrap();
+        let serialized: Vec<u8> = URL_SAFE.decode(SERIALIZED).unwrap();
         let macaroon = super::deserialize(&serialized).unwrap();
         assert_eq!("http://example.org/", macaroon.location().unwrap());
         assert_eq!(b"keyid", macaroon.identifier());
@@ -300,13 +301,17 @@ mod tests {
             "keyid",
         )
         .unwrap();
-        macaroon.add_first_party_caveat("account = 3735928559");
-        macaroon.add_first_party_caveat("user = alice");
-        macaroon.add_third_party_caveat(
-            "https://auth.mybank.com",
-            &MacaroonKey::generate(b"caveat key"),
-            "caveat",
-        );
+        macaroon
+            .add_first_party_caveat("account = 3735928559")
+            .unwrap();
+        macaroon.add_first_party_caveat("user = alice").unwrap();
+        macaroon
+            .add_third_party_caveat(
+                "https://auth.mybank.com",
+                &MacaroonKey::generate(b"caveat key"),
+                "caveat",
+            )
+            .unwrap();
         let serialized = super::serialize_binary(&macaroon).unwrap();
         macaroon = super::deserialize(&serialized).unwrap();
         assert_eq!("http://example.org/", macaroon.location().unwrap());
