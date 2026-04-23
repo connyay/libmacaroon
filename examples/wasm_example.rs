@@ -15,8 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key = MacaroonKey::generate(b"super-secret-key-for-demo");
 
     // Create a macaroon
-    let mut macaroon =
-        Macaroon::create(Some("https://example.com/".into()), &key, "demo-macaroon")?;
+    let mut macaroon = Macaroon::create(Some("https://example.com/"), &key, "demo-macaroon")?;
 
     // Add some caveats
     macaroon.add_first_party_caveat("user = alice")?;
@@ -55,11 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Third-party caveat added successfully (encryption worked)");
 
     // Create discharge macaroon
-    let mut discharge = Macaroon::create(
-        Some("https://auth.example.com".into()),
-        &caveat_key,
-        "caveat-id",
-    )?;
+    let mut discharge =
+        Macaroon::create(Some("https://auth.example.com"), &caveat_key, "caveat-id")?;
     discharge.add_first_party_caveat("time < 2025-12-31")?;
 
     // Bind the discharge

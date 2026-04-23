@@ -103,7 +103,7 @@ let key = MacaroonKey::generate(b"key");
 
 // Create a macaroon. Location is optional; identifier accepts any
 // `AsRef<[u8]>`.
-let mut macaroon = Macaroon::create(Some("location".into()), &key, "id")?;
+let mut macaroon = Macaroon::create(Some("location"), &key, "id")?;
 
 // Add a first-party caveat — an opaque predicate that the verifier will
 // match. Predicates accept any `AsRef<[u8]>`. Add as many as you want.
@@ -125,7 +125,7 @@ macaroon.add_third_party_caveat("https://auth.mybank", &other_key, "caveat id")?
 // The third party issues the discharge using the same caveat id and the
 // caveat key. They can also attach further caveats to the discharge.
 let mut discharge = Macaroon::create(
-    Some("http://auth.mybank/".into()),
+    Some("http://auth.mybank/"),
     &other_key,
     "caveat id",
 )?;
@@ -140,6 +140,24 @@ verifier.verify(&macaroon, &key, &[discharge])?;
 # Ok(())
 # }
 ```
+
+## API changes in `libmacaroon 0.2.0`
+
+- `Macaroon::create` takes `Option<&str>` for location instead of
+  `Option<String>`. Replace `Some("x".to_string())` / `Some("x".into())`
+  with `Some("x")`.
+- `add_first_party_caveat` and `add_third_party_caveat` now return
+  `Result<&mut Self>` instead of `Result<()>`, enabling `?`-chained
+  builds:
+
+  ```rust,ignore
+  let mut m = Macaroon::create(Some("loc"), &key, "id")?;
+  m.add_first_party_caveat("account = 12345")?
+      .add_first_party_caveat("user = alice")?;
+  ```
+
+  Existing `macaroon.add_first_party_caveat("x")?;` code continues to
+  compile (the returned `&mut Self` is silently discarded).
 
 ## API changes from `macaroon 0.3.0`
 

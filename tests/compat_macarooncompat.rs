@@ -15,12 +15,7 @@ fn libmacaroons_no_caveat() {
     // about: "no caveats, from libmacaroons example"
     // NOTE: compared to libmacaroons, there is a missing trailing slash on the 'location'
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mac = Macaroon::create(
-        Some("http://mybank".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mac = Macaroon::create(Some("http://mybank"), &root_key, "we used our secret key").unwrap();
     // expectSignature: "e3d9e02908526c4c0039ae15114115d97fdd68bf2ba379b342aaf0f617d0552f"
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
@@ -32,12 +27,8 @@ fn libmacaroons_no_caveat() {
 fn libmacaroons_one_caveat() {
     // about: "one caveat, from libmacaroons example"
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mut mac = Macaroon::create(
-        Some("http://mybank".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mut mac =
+        Macaroon::create(Some("http://mybank"), &root_key, "we used our secret key").unwrap();
     mac.add_first_party_caveat("account = 3735928559").unwrap();
     // expectSignature: "1efe4763f290dbce0c1d08477367e11f4eee456a64933cf662d79772dbb82128"
     assert_eq!(
@@ -50,12 +41,8 @@ fn libmacaroons_one_caveat() {
 fn libmacaroons_two_caveats() {
     // about: "two caveats, from libmacaroons example",
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mut mac = Macaroon::create(
-        Some("http://mybank".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mut mac =
+        Macaroon::create(Some("http://mybank"), &root_key, "we used our secret key").unwrap();
     mac.add_first_party_caveat("account = 3735928559").unwrap();
     mac.add_first_party_caveat("time < 2015-01-01T00:00")
         .unwrap();
@@ -70,12 +57,8 @@ fn libmacaroons_two_caveats() {
 fn libmacaroons_three_caveats() {
     // about: "three caveats, from libmacaroons example",
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mut mac = Macaroon::create(
-        Some("http://mybank".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mut mac =
+        Macaroon::create(Some("http://mybank"), &root_key, "we used our secret key").unwrap();
     mac.add_first_party_caveat("account = 3735928559").unwrap();
     mac.add_first_party_caveat("time < 2015-01-01T00:00")
         .unwrap();
@@ -95,7 +78,7 @@ fn libmacaroons_one_caveat_second() {
         b"this is a different super-secret key; never use the same secret twice",
     );
     let mut mac = Macaroon::create(
-        Some("http://mybank".into()),
+        Some("http://mybank"),
         &root_key,
         "we used our other secret key",
     )

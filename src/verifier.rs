@@ -213,8 +213,7 @@ mod tests {
     #[test]
     fn test_macaroon_two_exact_and_one_general_caveat() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &key, "keyid").unwrap();
+        let mut macaroon = Macaroon::create(Some("http://example.org/"), &key, "keyid").unwrap();
         macaroon
             .add_first_party_caveat("account = 3735928559")
             .unwrap();
@@ -232,8 +231,7 @@ mod tests {
     #[test]
     fn test_macaroon_two_exact_and_one_general_fails_general() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &key, "keyid").unwrap();
+        let mut macaroon = Macaroon::create(Some("http://example.org/"), &key, "keyid").unwrap();
         macaroon
             .add_first_party_caveat("account = 3735928559")
             .unwrap();
@@ -251,8 +249,7 @@ mod tests {
     #[test]
     fn test_macaroon_two_exact_and_one_general_incomplete_verifier() {
         let key = MacaroonKey::generate(b"this is the key");
-        let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &key, "keyid").unwrap();
+        let mut macaroon = Macaroon::create(Some("http://example.org/"), &key, "keyid").unwrap();
         macaroon
             .add_first_party_caveat("account = 3735928559")
             .unwrap();
@@ -271,16 +268,12 @@ mod tests {
         let root_key = MacaroonKey::generate(b"this is the key");
         let another_key = MacaroonKey::generate(b"this is another key");
         let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
+            Macaroon::create(Some("http://example.org/"), &root_key, "keyid").unwrap();
         macaroon
             .add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid")
             .unwrap();
-        let mut discharge = Macaroon::create(
-            Some("http://auth.mybank/".into()),
-            &another_key,
-            "other keyid",
-        )
-        .unwrap();
+        let mut discharge =
+            Macaroon::create(Some("http://auth.mybank/"), &another_key, "other keyid").unwrap();
         discharge
             .add_first_party_caveat("time > 2010-01-01T00:00+0000")
             .unwrap();
@@ -295,16 +288,12 @@ mod tests {
         let root_key = MacaroonKey::generate(b"this is the key");
         let another_key = MacaroonKey::generate(b"this is another key");
         let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
+            Macaroon::create(Some("http://example.org/"), &root_key, "keyid").unwrap();
         macaroon
             .add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid")
             .unwrap();
-        let mut discharge = Macaroon::create(
-            Some("http://auth.mybank/".into()),
-            &another_key,
-            "other keyid",
-        )
-        .unwrap();
+        let mut discharge =
+            Macaroon::create(Some("http://auth.mybank/"), &another_key, "other keyid").unwrap();
         discharge
             .add_third_party_caveat("http://auth.mybank/", &another_key, "other keyid")
             .unwrap();
@@ -321,7 +310,7 @@ mod tests {
         let root_key = MacaroonKey::generate(b"this is the key");
         let another_key = MacaroonKey::generate(b"this is another key");
         let mut macaroon =
-            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
+            Macaroon::create(Some("http://example.org/"), &root_key, "keyid").unwrap();
 
         // with no caveats, should verify fine
         let verifier = Verifier::default();
@@ -344,15 +333,12 @@ mod tests {
         // substitute a stale discharge for a fresh one.
         let root_key = MacaroonKey::generate(b"root");
         let cav_key = MacaroonKey::generate(b"caveat");
-        let mut mac =
-            Macaroon::create(Some("http://example.org/".into()), &root_key, "keyid").unwrap();
+        let mut mac = Macaroon::create(Some("http://example.org/"), &root_key, "keyid").unwrap();
         mac.add_third_party_caveat("http://auth/", &cav_key, "other keyid")
             .unwrap();
 
-        let mut d1 =
-            Macaroon::create(Some("http://auth/".into()), &cav_key, "other keyid").unwrap();
-        let mut d2 =
-            Macaroon::create(Some("http://auth/".into()), &cav_key, "other keyid").unwrap();
+        let mut d1 = Macaroon::create(Some("http://auth/"), &cav_key, "other keyid").unwrap();
+        let mut d2 = Macaroon::create(Some("http://auth/"), &cav_key, "other keyid").unwrap();
         mac.bind(&mut d1);
         mac.bind(&mut d2);
 

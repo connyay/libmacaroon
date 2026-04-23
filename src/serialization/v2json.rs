@@ -233,12 +233,8 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize() {
-        let mut macaroon = Macaroon::create(
-            Some("http://example.org/".into()),
-            &SIGNATURE.into(),
-            "keyid",
-        )
-        .unwrap();
+        let mut macaroon =
+            Macaroon::create(Some("http://example.org/"), &SIGNATURE.into(), "keyid").unwrap();
         macaroon.add_first_party_caveat("user = alice").unwrap();
         macaroon
             .add_third_party_caveat(

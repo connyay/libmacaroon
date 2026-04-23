@@ -27,12 +27,8 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 fn test_basic_signature() {
     // note that this one test is the same as libmacaroons example, but that the other tests aren't
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mac = Macaroon::create(
-        Some("http://mybank/".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mac =
+        Macaroon::create(Some("http://mybank/"), &root_key, "we used our secret key").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
         "e3d9e02908526c4c0039ae15114115d97fdd68bf2ba379b342aaf0f617d0552f"
@@ -42,12 +38,8 @@ fn test_basic_signature() {
 #[test]
 fn test_first_party_caveat() {
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mut mac = Macaroon::create(
-        Some("http://mybank/".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mut mac =
+        Macaroon::create(Some("http://mybank/"), &root_key, "we used our secret key").unwrap();
     mac.add_first_party_caveat("test = caveat").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
@@ -58,12 +50,8 @@ fn test_first_party_caveat() {
 #[test]
 fn test_serializing() {
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mut mac = Macaroon::create(
-        Some("http://mybank/".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mut mac =
+        Macaroon::create(Some("http://mybank/"), &root_key, "we used our secret key").unwrap();
     mac.add_first_party_caveat("test = caveat").unwrap();
     let b64_standard = "MDAxY2xvY2F0aW9uIGh0dHA6Ly9teWJhbmsvCjAwMjZpZGVudGlmaWVyIHdlIHVzZWQgb3VyIHNlY3JldCBrZXkKMDAxNmNpZCB0ZXN0ID0gY2F2ZWF0CjAwMmZzaWduYXR1cmUgGXusegRK8zMyhluSZuJtSTvdZopmDkTYjOGpmMI9vWcK";
     let b64_url_safe = URL_SAFE.encode(STANDARD.decode(b64_standard).unwrap());
@@ -83,8 +71,7 @@ fn test_serializing_binary_id() {
     let identifier = STANDARD
         .decode("AK2o+q0Aq9+bONkXw7ky7HAuhCLO9hhaMMc")
         .unwrap();
-    let mut mac =
-        Macaroon::create(Some("http://mybank/".into()), &root_key, identifier.clone()).unwrap();
+    let mut mac = Macaroon::create(Some("http://mybank/"), &root_key, identifier.clone()).unwrap();
     mac.add_first_party_caveat("test = caveat").unwrap();
 
     let after_v1 = Macaroon::deserialize(mac.serialize(Format::V1).unwrap()).unwrap();
@@ -119,7 +106,7 @@ fn test_deserializing_invalid() {
 #[test]
 fn test_serializing_max_length_packet() {
     let root_key = MacaroonKey::generate(b"blah");
-    let mut mac = Macaroon::create(Some("test".into()), &root_key, "secret").unwrap();
+    let mut mac = Macaroon::create(Some("test"), &root_key, "secret").unwrap();
     mac.add_first_party_caveat(vec![b'x'; 65526]).unwrap();
     assert!(mac.serialize(Format::V2).is_ok());
 }
@@ -130,7 +117,7 @@ fn test_serializing_too_long_packet() {
     // bytes. Rather than silently truncate at serialize time, the crate
     // rejects oversized fields at construction.
     let root_key = MacaroonKey::generate(b"blah");
-    let mut mac = Macaroon::create(Some("test".into()), &root_key, "secret").unwrap();
+    let mut mac = Macaroon::create(Some("test"), &root_key, "secret").unwrap();
     let err = mac
         .add_first_party_caveat(vec![b'x'; libmacaroon::MAX_FIELD_SIZE_BYTES + 1])
         .unwrap_err();

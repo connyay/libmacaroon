@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn test_serialize_deserialize() {
         let mut macaroon: Macaroon = Macaroon::create(
-            Some("http://example.org/".into()),
+            Some("http://example.org/"),
             &MacaroonKey::generate(b"my key"),
             "keyid",
         )

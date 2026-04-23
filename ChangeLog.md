@@ -1,6 +1,30 @@
 # libmacaroon Change Log
 
-## Version 0.1.0 - UNRELEASED (libmacaroon)
+## Version 0.2.0 - UNRELEASED (libmacaroon)
+
+Ergonomics improvements from first-wave dogfooding feedback. Both
+changes are breaking at call sites, but both are mechanical rewrites.
+
+- **`Macaroon::create`** now takes `Option<&str>` for the location
+  instead of `Option<String>`. A call site that was
+  `Some("http://bank".to_string())` or `Some("http://bank".into())`
+  becomes `Some("http://bank")`. The macaroon still owns its location
+  (the crate does one `.to_string()` internally), but the allocation
+  disappears from every call site.
+- **`add_first_party_caveat`** and **`add_third_party_caveat`** now
+  return `Result<&mut Self>` instead of `Result<()>`, so calls chain:
+
+  ```rust
+  let mut m = Macaroon::create(Some("loc"), &key, "id")?;
+  m.add_first_party_caveat("account = 12345")?
+      .add_first_party_caveat("user = alice")?;
+  ```
+
+  Same `?` count, fewer lines, reads as a pipeline. The cap checks that
+  made the calls fallible in 0.1.0 are unchanged — this is only a
+  return-type tweak.
+
+## Version 0.1.0 - 2026-04-23 (libmacaroon)
 
 First release under the `libmacaroon` name. This is a fork of the
 [`macaroon`](https://crates.io/crates/macaroon) crate

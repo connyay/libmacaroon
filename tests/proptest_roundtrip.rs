@@ -80,7 +80,7 @@ fn macaroon_spec_strategy() -> impl Strategy<Value = MacaroonSpec> {
 
 fn build(spec: &MacaroonSpec) -> (MacaroonKey, Macaroon) {
     let key = MacaroonKey::generate(&spec.key_seed);
-    let mut mac = Macaroon::create(spec.location.clone(), &key, spec.identifier.as_slice())
+    let mut mac = Macaroon::create(spec.location.as_deref(), &key, spec.identifier.as_slice())
         .expect("valid inputs");
     for c in &spec.caveats {
         match c {

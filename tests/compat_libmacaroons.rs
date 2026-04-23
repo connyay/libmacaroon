@@ -28,12 +28,8 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 #[test]
 fn creating_macaroons() {
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mac = Macaroon::create(
-        Some("http://mybank/".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mac =
+        Macaroon::create(Some("http://mybank/"), &root_key, "we used our secret key").unwrap();
 
     assert_eq!(mac.identifier(), b"we used our secret key");
     assert_eq!(mac.location(), Some("http://mybank/"));
@@ -51,12 +47,8 @@ fn creating_macaroons() {
 #[test]
 fn adding_caveats() {
     let root_key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mut mac = Macaroon::create(
-        Some("http://mybank".into()),
-        &root_key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mut mac =
+        Macaroon::create(Some("http://mybank"), &root_key, "we used our secret key").unwrap();
     mac.add_first_party_caveat("account = 3735928559").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
@@ -111,12 +103,7 @@ fn test_check_time() {
 #[test]
 fn verifying_macaroons() {
     let key = MacaroonKey::generate(b"this is our super secret key; only we should know it");
-    let mut mac = Macaroon::create(
-        Some("http://mybank/".into()),
-        &key,
-        "we used our secret key",
-    )
-    .unwrap();
+    let mut mac = Macaroon::create(Some("http://mybank/"), &key, "we used our secret key").unwrap();
     mac.add_first_party_caveat("account = 3735928559").unwrap();
     mac.add_first_party_caveat("time < 2020-01-01T00:00")
         .unwrap();
@@ -165,12 +152,8 @@ fn third_party_macaroons() {
     let key = MacaroonKey::generate(
         b"this is a different super-secret key; never use the same secret twice",
     );
-    let mut mac = Macaroon::create(
-        Some("http://mybank/".into()),
-        &key,
-        "we used our other secret key",
-    )
-    .unwrap();
+    let mut mac =
+        Macaroon::create(Some("http://mybank/"), &key, "we used our other secret key").unwrap();
     mac.add_first_party_caveat("account = 3735928559").unwrap();
     assert_eq!(
         bytes_to_hex(mac.signature().as_ref()),
@@ -208,7 +191,7 @@ fn third_party_macaroons() {
     */
 
     let mut discharge_mac = Macaroon::create(
-        Some("http://auth.mybank/".into()),
+        Some("http://auth.mybank/"),
         &caveat_key,
         "this was how we remind auth of key/pred",
     )

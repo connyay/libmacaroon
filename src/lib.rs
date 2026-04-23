@@ -35,7 +35,7 @@
 //! let key = MacaroonKey::generate(b"key");
 //!
 //! // Create our macaroon. A location is optional.
-//! let mut macaroon = Macaroon::create(Some("location".into()), &key, "id")?;
+//! let mut macaroon = Macaroon::create(Some("location"), &key, "id")?;
 //!
 //! // Add a first-party caveat: only someone identified as account 12345678
 //! // is authorized to use this macaroon. Multiple caveats with different
@@ -56,7 +56,7 @@
 //!
 //! // The third party creates the discharge using the same caveat id and key.
 //! let mut discharge = Macaroon::create(
-//!     Some("http://auth.mybank/".into()),
+//!     Some("http://auth.mybank/"),
 //!     &other_key,
 //!     "caveat id",
 //! )?;
@@ -297,19 +297,19 @@ impl Macaroon {
     /// - [`MacaroonError::FieldTooLarge`] if the identifier or location
     ///   exceeds [`MAX_FIELD_SIZE_BYTES`].
     pub fn create(
-        location: Option<String>,
+        location: Option<&str>,
         key: &MacaroonKey,
         identifier: impl AsRef<[u8]>,
     ) -> Result<Macaroon> {
         let identifier_bytes = identifier.as_ref();
         check_field_size("identifier", identifier_bytes.len())?;
-        if let Some(loc) = &location {
+        if let Some(loc) = location {
             check_field_size("location", loc.len())?;
         }
         let identifier = ByteString(identifier_bytes.to_vec());
         let signature = crypto::hmac(key, &identifier);
         let macaroon = Macaroon {
-            location,
+            location: location.map(str::to_string),
             identifier,
             signature,
             caveats: Vec::new(),
@@ -386,7 +386,17 @@ impl Macaroon {
     ///   the [`MAX_CAVEATS`] limit.
     /// - [`MacaroonError::FieldTooLarge`] if the predicate exceeds
     ///   [`MAX_FIELD_SIZE_BYTES`].
-    pub fn add_first_party_caveat(&mut self, predicate: impl AsRef<[u8]>) -> Result<()> {
+    ///
+    /// ```
+    /// # use libmacaroon::{Macaroon, MacaroonKey};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let key = MacaroonKey::generate(b"k");
+    /// let mut m = Macaroon::create(Some("loc"), &key, "id")?;
+    /// m.add_first_party_caveat("account = 12345")?
+    ///     .add_first_party_caveat("user = alice")?;
+    /// # Ok(()) }
+    /// ```
+    pub fn add_first_party_caveat(&mut self, predicate: impl AsRef<[u8]>) -> Result<&mut Self> {
         let predicate_bytes = predicate.as_ref();
         check_field_size("predicate", predicate_bytes.len())?;
         self.check_caveat_capacity()?;
@@ -394,7 +404,7 @@ impl Macaroon {
         self.signature = caveat.sign(&self.signature);
         self.caveats.push(caveat);
         debug!("Macaroon::add_first_party_caveat: {:?}", self);
-        Ok(())
+        Ok(self)
     }
 
     /// Add a third-party caveat to the macaroon
@@ -416,7 +426,7 @@ impl Macaroon {
         location: &str,
         key: &MacaroonKey,
         id: impl AsRef<[u8]>,
-    ) -> Result<()> {
+    ) -> Result<&mut Self> {
         let id_bytes = id.as_ref();
         check_field_size("caveat id", id_bytes.len())?;
         check_field_size("caveat location", location.len())?;
@@ -427,7 +437,7 @@ impl Macaroon {
         self.signature = caveat.sign(&self.signature);
         self.caveats.push(caveat);
         debug!("Macaroon::add_third_party_caveat: {:?}", self);
-        Ok(())
+        Ok(self)
     }
 
     fn check_caveat_capacity(&self) -> Result<()> {
@@ -546,7 +556,7 @@ mod tests {
         .into();
         // NOTE: using byte string directly, not generating with HMAC
         let key = MacaroonKey::from(b"this is a super duper secret key");
-        let macaroon_res = Macaroon::create(Some("location".into()), &key, "identifier");
+        let macaroon_res = Macaroon::create(Some("location"), &key, "identifier");
         assert!(macaroon_res.is_ok());
         let macaroon = macaroon_res.unwrap();
         assert!(macaroon.location.is_some());
@@ -560,7 +570,7 @@ mod tests {
     fn create_invalid_macaroon() {
         // NOTE: using byte string directly, not generating with HMAC
         let key = MacaroonKey::from(b"this is a super duper secret key");
-        let macaroon_res: Result<Macaroon> = Macaroon::create(Some("location".into()), &key, "");
+        let macaroon_res: Result<Macaroon> = Macaroon::create(Some("location"), &key, "");
         assert!(macaroon_res.is_err());
         assert!(matches!(
             macaroon_res,
@@ -579,7 +589,7 @@ mod tests {
         println!("{}", deser_err.unwrap_err());
 
         let key = MacaroonKey::generate(b"this is a super duper secret key");
-        let mut mac = Macaroon::create(Some("http://mybank".into()), &key, "identifier").unwrap();
+        let mut mac = Macaroon::create(Some("http://mybank"), &key, "identifier").unwrap();
 
         let mut ver = Verifier::default();
         let wrong_key = MacaroonKey::generate(b"not what was expected");
@@ -604,7 +614,7 @@ mod tests {
         println!("{}", cav_err.unwrap_err());
 
         let discharge =
-            Macaroon::create(Some("http://auth.mybank/".into()), &cav_key, "other keyid").unwrap();
+            Macaroon::create(Some("http://auth.mybank/"), &cav_key, "other keyid").unwrap();
         let disch_err = ver.verify(&mac, &key, &[discharge]);
         assert!(matches!(disch_err, Err(MacaroonError::DischargeNotUsed)));
         println!("{}", disch_err.unwrap_err());
@@ -619,7 +629,7 @@ mod tests {
         .into();
         // NOTE: using byte string directly, not generating with HMAC
         let key = MacaroonKey::from(b"this is a super duper secret key");
-        let mut macaroon = Macaroon::create(Some("location".into()), &key, "identifier").unwrap();
+        let mut macaroon = Macaroon::create(Some("location"), &key, "identifier").unwrap();
         macaroon.add_first_party_caveat("predicate").unwrap();
         assert_eq!(1, macaroon.caveats.len());
         let predicate = match &macaroon.caveats[0] {
@@ -635,7 +645,7 @@ mod tests {
     fn create_macaroon_with_third_party_caveat() {
         // NOTE: using byte string directly, not generating with HMAC
         let key = MacaroonKey::from(b"this is a super duper secret key");
-        let mut macaroon = Macaroon::create(Some("location".into()), &key, "identifier").unwrap();
+        let mut macaroon = Macaroon::create(Some("location"), &key, "identifier").unwrap();
         let location = "https://auth.mybank.com";
         let cav_key = MacaroonKey::generate(b"My key");
         let id = "My Caveat";
