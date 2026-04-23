@@ -4,7 +4,7 @@ use base64::{
     engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
     Engine as _,
 };
-use macaroon::{Format, Macaroon, MacaroonError, MacaroonKey};
+use libmacaroon::{Format, Macaroon, MacaroonError, MacaroonKey};
 
 const STANDARD: GeneralPurpose = GeneralPurpose::new(
     &alphabet::STANDARD,
@@ -132,7 +132,7 @@ fn test_serializing_too_long_packet() {
     let root_key = MacaroonKey::generate(b"blah");
     let mut mac = Macaroon::create(Some("test".into()), &root_key, "secret").unwrap();
     let err = mac
-        .add_first_party_caveat(vec![b'x'; macaroon::MAX_FIELD_SIZE_BYTES + 1])
+        .add_first_party_caveat(vec![b'x'; libmacaroon::MAX_FIELD_SIZE_BYTES + 1])
         .unwrap_err();
     assert!(matches!(err, MacaroonError::FieldTooLarge { .. }));
 }

@@ -1,5 +1,5 @@
 [package]
-name = "macaroon-fuzz"
+name = "libmacaroon-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-macaroon = { path = ".." }
+libmacaroon = { path = ".." }
 
 # Each fuzz target is a separate binary. Run with e.g.:
 #   cargo +nightly fuzz run deserialize

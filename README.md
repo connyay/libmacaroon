@@ -1,14 +1,23 @@
 <img src="ferris_macaroons_logo.svg" alt="Ferris holding French macaroons" width="200"/>
 
-# macaroon
+# libmacaroon
 
 Rust implementation of
 [macaroons](https://research.google.com/pubs/pub41892.html).
 
-[![Crates.io](https://img.shields.io/crates/v/macaroon)](https://crates.io/crates/macaroon)
-[![Build Status](https://github.com/macaroon-rs/macaroon/workflows/build_and_test/badge.svg?branch=main)](https://github.com/macaroon-rs/macaroon/actions)
-[![codecov](https://codecov.io/gh/macaroon-rs/macaroon/branch/main/graph/badge.svg)](https://codecov.io/gh/macaroon-rs/macaroon)
-[![Docs.rs](https://docs.rs/macaroon/badge.svg)](https://docs.rs/macaroon)
+[![Crates.io](https://img.shields.io/crates/v/libmacaroon)](https://crates.io/crates/libmacaroon)
+[![Build Status](https://github.com/connyay/libmacaroon/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/connyay/libmacaroon/actions)
+[![Docs.rs](https://docs.rs/libmacaroon/badge.svg)](https://docs.rs/libmacaroon)
+
+This is a maintained fork of the [`macaroon`] crate
+(`macaroon-rs/macaroon`, last released Oct 2022). The fork carries
+forward the paper-faithful macaroon semantics and wire-compatibility
+with libmacaroons / pymacaroons, and adds a pre-release hardening pass:
+constant-time signature comparison, key zeroization on drop, DoS caps,
+WASM support via pure-Rust `crypto_secretbox`, interop and property
+tests, and a fuzz harness. See `ChangeLog.md` for the full list.
+
+[`macaroon`]: https://crates.io/crates/macaroon
 
 ## Status
 
@@ -86,7 +95,7 @@ the above process.
 
 ```rust
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-use macaroon::{Macaroon, Verifier, MacaroonKey};
+use libmacaroon::{Macaroon, Verifier, MacaroonKey};
 
 // Create a key. `generate` derives via HMAC from any byte string; for a
 // fresh random key use `MacaroonKey::generate_random()?`.
@@ -132,9 +141,11 @@ verifier.verify(&macaroon, &key, &[discharge])?;
 # }
 ```
 
-## API Changes (0.3.x)
+## API changes from `macaroon 0.3.0`
 
-This version includes several breaking changes from 0.2.x:
+The `libmacaroon 0.1.0` API carries forward the macaroon-rs 0.3.0
+surface with these changes. Migrating from `macaroon` is mostly a
+crate-name swap plus a handful of signature tweaks:
 
 - **`initialize()` removed** — The library no longer requires explicit initialization.
   The cryptographic backend is now pure Rust and thread-safe by default.
@@ -190,12 +201,10 @@ This version includes several breaking changes from 0.2.x:
 
 ## Backwards compatibility
 
-As the original project is currently only released as a minor version, we expect to make
-breaking changes to the API, especially as we begin to use it in more real-world
-scenarios. However, all of these changes will be enumerated in each version's
-changelog and release notes. Once we have found an API that is sane and stable,
-we will release a 1.0, after which point, all versions of the 1.X line will be
-backwards compatible per [semver](https://semver.org).
+Pre-1.0; breaking changes may land in any `0.x.y` minor bump, with
+changelog entries and migration notes per release. Once the API has
+shaken out against real-world use, a 1.0 will commit to semver — no
+breaking changes within the `1.x` line.
 
 ## WebAssembly (WASM) Support
 
@@ -203,7 +212,7 @@ This crate now supports WebAssembly! Use the `wasm` feature to enable WASM compa
 
 ```toml
 [dependencies]
-macaroon = { version = "0.3", default-features = false, features = ["wasm"] }
+libmacaroon = { version = "0.1", default-features = false, features = ["wasm"] }
 ```
 
 The `wasm` feature enables browser-compatible random number generation. The

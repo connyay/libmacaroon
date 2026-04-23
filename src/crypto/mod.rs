@@ -30,7 +30,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// # use std::error::Error;
 /// #
 /// # fn main() -> Result<(), Box<dyn Error>> {
-/// use macaroon::MacaroonKey;
+/// use libmacaroon::MacaroonKey;
 /// use base64::{engine::general_purpose::STANDARD, Engine as _};
 ///
 /// // generate a new random key from scratch
@@ -102,7 +102,7 @@ impl MacaroonKey {
     /// `crypto.getRandomValues` API on WASM) is unavailable.
     ///
     /// ```rust
-    /// # use macaroon::MacaroonKey;
+    /// # use libmacaroon::MacaroonKey;
     /// let key = MacaroonKey::generate_random().expect("OS RNG available");
     /// ```
     pub fn generate_random() -> Result<Self> {
@@ -112,7 +112,7 @@ impl MacaroonKey {
     /// Use some seed data to reproducibly generate a MacaroonKey via HMAC.
     ///
     /// ```rust
-    /// # use macaroon::MacaroonKey;
+    /// # use libmacaroon::MacaroonKey;
     /// let key = MacaroonKey::generate(b"secret-byte-string");
     /// let key = MacaroonKey::generate("secret-unicode-string‽".as_bytes());
     ///

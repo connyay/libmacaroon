@@ -6,7 +6,7 @@
 //! To build for WASM:
 //! cargo build --example wasm_example --target wasm32-unknown-unknown --features wasm
 
-use macaroon::{Macaroon, MacaroonKey, Verifier};
+use libmacaroon::{Macaroon, MacaroonKey, Verifier};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating macaroon with RustCrypto backend...");
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Macaroon created with {} caveats", macaroon.caveats().len());
 
     // Serialize the macaroon
-    let serialized = macaroon.serialize(macaroon::Format::V2)?;
+    let serialized = macaroon.serialize(libmacaroon::Format::V2)?;
     println!("Serialized macaroon length: {} bytes", serialized.len());
 
     // Deserialize the macaroon

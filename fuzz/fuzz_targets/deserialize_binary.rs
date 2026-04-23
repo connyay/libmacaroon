@@ -9,5 +9,5 @@
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    let _ = macaroon::Macaroon::deserialize_binary(data);
+    let _ = libmacaroon::Macaroon::deserialize_binary(data);
 });

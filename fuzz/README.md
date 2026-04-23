@@ -1,4 +1,4 @@
-# Fuzz targets for `macaroon`
+# Fuzz targets for `libmacaroon`
 
 Runs under [`cargo-fuzz`] against the two deserialization entry points.
 

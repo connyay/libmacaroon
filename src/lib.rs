@@ -29,7 +29,7 @@
 //!
 //! ```rust
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use macaroon::{Macaroon, Verifier, MacaroonKey};
+//! use libmacaroon::{Macaroon, Verifier, MacaroonKey};
 //!
 //! // Create our key.
 //! let key = MacaroonKey::generate(b"key");
@@ -475,7 +475,7 @@ impl Macaroon {
     /// ## Usage
     ///
     /// ```rust
-    /// use macaroon::Macaroon;
+    /// use libmacaroon::Macaroon;
     /// # use std::error::Error;
     /// # fn main() -> Result<(), Box<dyn Error>> {
     ///

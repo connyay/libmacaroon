@@ -1,9 +1,21 @@
-# macaroon Change Log
+# libmacaroon Change Log
 
-## Version 0.3.1 - UNRELEASED (macaroon)
+## Version 0.1.0 - UNRELEASED (libmacaroon)
 
-Pre-release hardening pass. Several breaking API changes — see README's
-"API Changes (0.3.x)" section for the full list.
+First release under the `libmacaroon` name. This is a fork of the
+[`macaroon`](https://crates.io/crates/macaroon) crate
+(`macaroon-rs/macaroon`, last released as 0.3.0 in Oct 2022), published
+fresh on crates.io under the new name — so the version resets to 0.1.0
+even though the internals continue from `macaroon 0.3.0` plus the
+pre-release hardening below.
+
+The API is source-compatible with `macaroon 0.3.0` in spirit, but many
+signatures changed for the hardening work (see "API changes from
+`macaroon 0.3.0`" below).
+
+### API changes from `macaroon 0.3.0`
+
+Several breaking changes from the original `macaroon 0.3.0` API.
 
 **Security / interop fixes:**
 - V2JSON decoder now accepts URL-safe base64 in `i64`, `v64`, `l64`, and

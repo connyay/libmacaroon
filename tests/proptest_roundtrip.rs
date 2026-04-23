@@ -17,7 +17,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use macaroon::{Format, Macaroon, MacaroonKey, Verifier};
+use libmacaroon::{Format, Macaroon, MacaroonKey, Verifier};
 use proptest::collection::vec;
 use proptest::prelude::*;
 

@@ -1,13 +1,19 @@
 [package]
-name = "macaroon"
-version = "0.3.1-dev.0"
+name = "libmacaroon"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.71"
-authors = ["Jack Lund <jackl@geekheads.net>", "macaroon-rs Contributors"]
-description = "Fully functional implementation of macaroons in Rust"
-documentation = "https://docs.rs/macaroon"
-repository = "https://github.com/macaroon-rs/macaroon"
-keywords = ["macaroon", "cookies", "authorization", "credentials"]
+authors = [
+    "Connor Hindley <conn.hindley@gmail.com>",
+    "Jack Lund <jackl@geekheads.net>",
+    "macaroon-rs Contributors",
+]
+description = "Macaroons (bearer credentials with contextual caveats) in pure Rust, with first-party and third-party caveats, WASM support, and cross-language interop."
+documentation = "https://docs.rs/libmacaroon"
+repository = "https://github.com/connyay/libmacaroon"
+homepage = "https://github.com/connyay/libmacaroon"
+readme = "README.md"
+keywords = ["macaroon", "authorization", "credentials", "bearer-token"]
 categories = ["authentication", "cryptography"]
 license = "MIT"
 

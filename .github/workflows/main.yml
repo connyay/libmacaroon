@@ -69,3 +69,42 @@ jobs:
       - uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Publishes to crates.io when a `v*.*.*` tag is pushed. Gated on every
+  # other job passing so a green tag build is required to ship.
+  publish:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [fmt, clippy, test, msrv, wasm, audit]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify tag matches Cargo.toml version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag v$TAG does not match Cargo.toml version $VERSION"
+            exit 1
+          fi
+      # Dry run first — surfaces packaging errors (missing files,
+      # dirty-tree warnings that actually are errors on publish) before
+      # the real publish, without cluttering the crates.io history.
+      - run: cargo publish --locked --dry-run
+      - run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      # Creates a GitHub Release for the tag. No release notes are
+      # generated — fill in from ChangeLog.md manually, or drop the `-F`
+      # flag if you want an empty body you can edit in the UI.
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "See [ChangeLog.md](https://github.com/${{ github.repository }}/blob/main/ChangeLog.md) for release notes."

@@ -6,7 +6,7 @@ use base64::{
     engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
     Engine as _,
 };
-use macaroon::{Caveat, Format, Macaroon, MacaroonKey, Verifier};
+use libmacaroon::{Caveat, Format, Macaroon, MacaroonKey, Verifier};
 
 const STANDARD: GeneralPurpose = GeneralPurpose::new(
     &alphabet::STANDARD,

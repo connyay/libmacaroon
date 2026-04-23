@@ -1,6 +1,6 @@
 /// Conversion of compatability tests from the 'macarooncompat' project:
 /// https://github.com/go-macaroon/macarooncompat/blob/master/compat_test.go
-use macaroon::{Macaroon, MacaroonKey};
+use libmacaroon::{Macaroon, MacaroonKey};
 
 fn bytes_to_hex(bytes: &[u8]) -> String {
     bytes
