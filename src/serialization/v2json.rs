@@ -75,6 +75,16 @@ impl Serialization {
     }
 }
 
+fn reject_both<A, B>(a: &Option<A>, b: &Option<B>, pair: &str) -> Result<()> {
+    if a.is_some() && b.is_some() {
+        return Err(MacaroonError::DeserializationError(format!(
+            "Found {} fields",
+            pair
+        )));
+    }
+    Ok(())
+}
+
 impl Macaroon {
     fn from_json(ser: Serialization) -> Result<Macaroon> {
         if ser.v != 2 {
@@ -83,21 +93,9 @@ impl Macaroon {
                 ser.v
             )));
         }
-        if ser.i.is_some() && ser.i64.is_some() {
-            return Err(MacaroonError::DeserializationError(String::from(
-                "Found i and i64 fields",
-            )));
-        }
-        if ser.l.is_some() && ser.l64.is_some() {
-            return Err(MacaroonError::DeserializationError(String::from(
-                "Found l and l64 fields",
-            )));
-        }
-        if ser.s.is_some() && ser.s64.is_some() {
-            return Err(MacaroonError::DeserializationError(String::from(
-                "Found s and s64 fields",
-            )));
-        }
+        reject_both(&ser.i, &ser.i64, "i and i64")?;
+        reject_both(&ser.l, &ser.l64, "l and l64")?;
+        reject_both(&ser.s, &ser.s64, "s and s64")?;
 
         let mut builder: MacaroonBuilder = MacaroonBuilder::new();
         builder.set_identifier(match ser.i {
@@ -144,25 +142,13 @@ impl Macaroon {
 
         let mut caveat_builder: CaveatBuilder = CaveatBuilder::new();
         for c in ser.c {
-            // Mirror the top-level `i`/`i64`, `l`/`l64`, `v`/`v64` exclusion
-            // checks at the caveat level so a token cannot silently prefer
-            // one encoding over another. Two serializers that read different
-            // fields must not see different content.
-            if c.i.is_some() && c.i64.is_some() {
-                return Err(MacaroonError::DeserializationError(String::from(
-                    "Caveat has both i and i64 fields",
-                )));
-            }
-            if c.l.is_some() && c.l64.is_some() {
-                return Err(MacaroonError::DeserializationError(String::from(
-                    "Caveat has both l and l64 fields",
-                )));
-            }
-            if c.v.is_some() && c.v64.is_some() {
-                return Err(MacaroonError::DeserializationError(String::from(
-                    "Caveat has both v and v64 fields",
-                )));
-            }
+            // Mirror the top-level exclusion checks at the caveat level so a
+            // token cannot silently prefer one encoding over another. Two
+            // serializers that read different fields must not see different
+            // content.
+            reject_both(&c.i, &c.i64, "caveat i and i64")?;
+            reject_both(&c.l, &c.l64, "caveat l and l64")?;
+            reject_both(&c.v, &c.v64, "caveat v and v64")?;
 
             caveat_builder.add_id(match c.i {
                 Some(id) => id.into(),

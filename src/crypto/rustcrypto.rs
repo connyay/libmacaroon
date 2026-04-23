@@ -41,8 +41,15 @@ impl RustCryptoBackend {
     {
         let tmp1 = Self::hmac(key, text1);
         let tmp2 = Self::hmac(key, text2);
-        let tmp = [tmp1.as_ref() as &[u8], tmp2.as_ref() as &[u8]].concat();
-        Self::hmac(key, &tmp)
+        let mut mac = <HmacSha256 as Mac>::new_from_slice(key.as_ref())
+            .expect("HMAC can take key of any size");
+        mac.update(tmp1.as_ref());
+        mac.update(tmp2.as_ref());
+        let result = mac.finalize().into_bytes();
+
+        let mut key_bytes = [0u8; 32];
+        key_bytes.copy_from_slice(&result);
+        MacaroonKey::from(key_bytes)
     }
 
     pub fn encrypt_key<T>(key: &T, plaintext: &T) -> Result<Vec<u8>>

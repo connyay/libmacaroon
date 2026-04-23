@@ -1,7 +1,7 @@
 use crate::caveat::{Caveat, CaveatBuilder};
 use crate::error::MacaroonError;
 use crate::serialization::macaroon_builder::MacaroonBuilder;
-use crate::{ByteString, Macaroon, Result, MAX_FIELD_SIZE_BYTES, URL_SAFE};
+use crate::{check_field_size, ByteString, Macaroon, Result, URL_SAFE};
 use base64::Engine as _;
 use log::error;
 use std::str;
@@ -108,14 +108,9 @@ fn deserialize_as_packets(data: &[u8]) -> Result<Vec<Packet>> {
         }
         // skip beginning space and terminating \n
         let value_len = value_slice.len() - 2;
-        if value_len > MAX_FIELD_SIZE_BYTES {
-            return Err(MacaroonError::DeserializationError(format!(
-                "packet value size too large ({} > {})",
-                value_len, MAX_FIELD_SIZE_BYTES
-            )));
-        }
+        check_field_size("v1 packet", value_len)?;
         packets.push(Packet {
-            key: String::from_utf8(key_slice.to_vec())?,
+            key: str::from_utf8(key_slice)?.to_owned(),
             value: value_slice[1..value_slice.len() - 1].to_vec(),
         });
         remaining = &remaining[size..];
@@ -134,10 +129,9 @@ fn split_index(packet: &[u8]) -> Result<usize> {
 
 /// Takes a binary token (not base64-encoded)
 pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
-    let data = data.to_vec();
     let mut builder: MacaroonBuilder = MacaroonBuilder::new();
     let mut caveat_builder: CaveatBuilder = CaveatBuilder::new();
-    for packet in deserialize_as_packets(data.as_slice())? {
+    for packet in deserialize_as_packets(data)? {
         match packet.key.as_str() {
             LOCATION => {
                 builder.set_location(&String::from_utf8(packet.value)?);

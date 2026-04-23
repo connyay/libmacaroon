@@ -1,7 +1,7 @@
 use crate::caveat::{Caveat, CaveatBuilder};
 use crate::error::MacaroonError;
 use crate::serialization::macaroon_builder::MacaroonBuilder;
-use crate::{ByteString, Macaroon, Result, MAX_FIELD_SIZE_BYTES, URL_SAFE};
+use crate::{check_field_size, ByteString, Macaroon, Result, URL_SAFE};
 use base64::Engine as _;
 
 // Version 2 fields
@@ -121,12 +121,7 @@ impl<'r> Deserializer<'r> {
                 size |= ((byte & 127) as usize) << shift;
             } else {
                 size |= (byte as usize) << shift;
-                if size > MAX_FIELD_SIZE_BYTES {
-                    return Err(MacaroonError::DeserializationError(format!(
-                        "field size too large ({} > {})",
-                        size, MAX_FIELD_SIZE_BYTES
-                    )));
-                }
+                check_field_size("v2 field", size)?;
                 return Ok(size);
             }
             shift += 7;
