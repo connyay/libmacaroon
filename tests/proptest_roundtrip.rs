@@ -11,6 +11,11 @@
 //! Field size bounds are kept well under `MAX_FIELD_SIZE_BYTES` and caveat
 //! counts under `MAX_CAVEATS` so this runs in a reasonable time under the
 //! default proptest configuration.
+//!
+//! Skipped on wasm32 — proptest's transitive deps don't support that
+//! target (see Cargo.toml for the dev-dependency scope).
+
+#![cfg(not(target_arch = "wasm32"))]
 
 use macaroon::{Format, Macaroon, MacaroonKey, Verifier};
 use proptest::collection::vec;

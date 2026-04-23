@@ -32,4 +32,11 @@ zeroize = { version = "1.8", features = ["derive"] }
 [dev-dependencies]
 env_logger = "0.11"
 time = { version = "0.3.47", features = ["parsing"] }
+
+# proptest pulls in rand 0.9 -> getrandom 0.3, which needs a different
+# wasm32 configuration than the getrandom 0.2 we use directly. Cargo
+# includes dev-dependencies when building examples, so the WASM example
+# build would fail on that mismatch. The property tests don't run on
+# wasm32 targets anyway — scope them to everything else.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 proptest = "1"
