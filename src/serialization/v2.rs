@@ -53,7 +53,7 @@ pub fn serialize_binary(macaroon: &Macaroon) -> Result<Vec<u8>> {
         }
     }
     buffer.push(EOS);
-    serialize_field(SIGNATURE, macaroon.signature(), &mut buffer);
+    serialize_field(SIGNATURE, macaroon.signature().as_ref(), &mut buffer);
     Ok(buffer)
 }
 
@@ -347,6 +347,6 @@ mod tests {
         assert!(super::deserialize(b"\0").is_err());
 
         // these failed fuzz testing for this deserializer (V2)
-        assert!(Macaroon::deserialize(&vec![2, 2, 212, 212, 212, 212]).is_err());
+        assert!(Macaroon::deserialize(vec![2, 2, 212, 212, 212, 212]).is_err());
     }
 }

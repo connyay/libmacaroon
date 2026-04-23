@@ -2,7 +2,7 @@
 name = "macaroon"
 version = "0.3.1-dev.0"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.60"
 authors = ["Jack Lund <jackl@geekheads.net>", "macaroon-rs Contributors"]
 description = "Fully functional implementation of macaroons in Rust"
 documentation = "https://docs.rs/macaroon"
@@ -24,12 +24,11 @@ base64 = "0.22"
 # Crypto (RustCrypto ecosystem — pure Rust, WASM-compatible)
 hmac = "0.12"
 sha2 = "0.10"
-xsalsa20poly1305 = "0.9"
-rand = "0.8"
+crypto_secretbox = { version = "0.1", default-features = false, features = ["alloc", "salsa20"] }
 getrandom = "0.2"
 subtle = "2.6"
 zeroize = { version = "1.8", features = ["derive"] }
 
 [dev-dependencies]
 env_logger = "0.11"
-time = { version = "0.3", features = ["parsing"] }
+time = { version = "0.3.47", features = ["parsing"] }

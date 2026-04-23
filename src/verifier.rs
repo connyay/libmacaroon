@@ -5,7 +5,12 @@ use std::collections::HashMap;
 
 const MAX_VERIFICATION_DEPTH: usize = 32;
 
-type GeneralVerifier = Box<dyn Fn(&[u8]) -> bool>;
+/// Boxed predicate for `satisfy_general`. The `Send + Sync` bound lets the
+/// resulting [`Verifier`] itself be `Send + Sync`, so callers can build one
+/// at startup and share `&Verifier` across request handlers (the typical
+/// HTTP server pattern). The tax on user closures is small — most don't
+/// capture non-thread-safe state.
+type GeneralVerifier = Box<dyn Fn(&[u8]) -> bool + Send + Sync>;
 
 #[derive(Default)]
 pub struct Verifier {
@@ -80,7 +85,7 @@ impl Verifier {
         self.exact.insert(ByteString(b.as_ref().to_vec()));
     }
 
-    pub fn satisfy_general<F: Fn(&[u8]) -> bool + 'static>(&mut self, f: F) {
+    pub fn satisfy_general<F: Fn(&[u8]) -> bool + Send + Sync + 'static>(&mut self, f: F) {
         self.general.push(Box::new(f))
     }
 

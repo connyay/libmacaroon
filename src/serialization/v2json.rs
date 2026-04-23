@@ -2,7 +2,7 @@ use crate::caveat;
 use crate::caveat::CaveatBuilder;
 use crate::error::MacaroonError;
 use crate::serialization::macaroon_builder::MacaroonBuilder;
-use crate::{ByteString, Macaroon, Result, URL_SAFE};
+use crate::{base64_decode_flexible, ByteString, Macaroon, Result, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -40,7 +40,9 @@ impl Serialization {
             l64: None,
             c: Vec::new(),
             s: None,
-            s64: Some(URL_SAFE.encode(macaroon.signature())),
+            // URL-safe, no padding — matches libmacaroons / pymacaroons
+            // wire format for `s64`.
+            s64: Some(URL_SAFE_NO_PAD.encode(macaroon.signature())),
         };
         for c in macaroon.caveats() {
             match c {
@@ -109,7 +111,8 @@ impl Macaroon {
             Some(loc) => builder.set_location(&loc),
             None => {
                 if let Some(loc) = ser.l64 {
-                    builder.set_location(&String::from_utf8(URL_SAFE.decode(&loc)?)?)
+                    builder
+                        .set_location(&String::from_utf8(base64_decode_flexible(loc.as_bytes())?)?)
                 }
             }
         };
@@ -117,7 +120,7 @@ impl Macaroon {
         let raw_sig = match ser.s {
             Some(sig) => sig,
             None => match ser.s64 {
-                Some(sig) => URL_SAFE.decode(&sig)?,
+                Some(sig) => base64_decode_flexible(sig.as_bytes())?,
                 None => {
                     return Err(MacaroonError::DeserializationError(
                         "No signature found".into(),
@@ -135,14 +138,33 @@ impl Macaroon {
 
         let mut caveat_builder: CaveatBuilder = CaveatBuilder::new();
         for c in ser.c {
+            // Mirror the top-level `i`/`i64`, `l`/`l64`, `v`/`v64` exclusion
+            // checks at the caveat level so a token cannot silently prefer
+            // one encoding over another. Two serializers that read different
+            // fields must not see different content.
+            if c.i.is_some() && c.i64.is_some() {
+                return Err(MacaroonError::DeserializationError(String::from(
+                    "Caveat has both i and i64 fields",
+                )));
+            }
+            if c.l.is_some() && c.l64.is_some() {
+                return Err(MacaroonError::DeserializationError(String::from(
+                    "Caveat has both l and l64 fields",
+                )));
+            }
+            if c.v.is_some() && c.v64.is_some() {
+                return Err(MacaroonError::DeserializationError(String::from(
+                    "Caveat has both v and v64 fields",
+                )));
+            }
+
             caveat_builder.add_id(match c.i {
                 Some(id) => id.into(),
                 None => match c.i64 {
                     Some(id64) => id64,
                     None => {
                         return Err(MacaroonError::DeserializationError(String::from(
-                            "No caveat \
-                             ID found",
+                            "No caveat ID found",
                         )))
                     }
                 },
@@ -151,7 +173,9 @@ impl Macaroon {
                 Some(loc) => caveat_builder.add_location(loc),
                 None => {
                     if let Some(loc64) = c.l64 {
-                        caveat_builder.add_location(String::from_utf8(URL_SAFE.decode(&loc64)?)?)
+                        caveat_builder.add_location(String::from_utf8(base64_decode_flexible(
+                            loc64.as_bytes(),
+                        )?)?)
                     }
                 }
             };

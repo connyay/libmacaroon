@@ -78,7 +78,7 @@ fn adding_caveats() {
     );
 
     // serialize and deserialize using V1
-    let mac2 = Macaroon::deserialize(&mac.serialize(Format::V1).unwrap()).unwrap();
+    let mac2 = Macaroon::deserialize(mac.serialize(Format::V1).unwrap()).unwrap();
     assert_eq!(
         bytes_to_hex(mac2.signature().as_ref()),
         "ddf553e46083e55b8d71ab822be3d8fcf21d6bf19c40d617bb9fb438934474b6"
@@ -103,9 +103,9 @@ fn check_time(caveat: &[u8]) -> bool {
 
 #[test]
 fn test_check_time() {
-    assert_eq!(check_time(b"time < 2020-01-01T00:00"), true);
-    assert_eq!(check_time(b"time < 2014-01-01T00:00"), false);
-    assert_eq!(check_time(b"account = 3735928559"), false);
+    assert!(check_time(b"time < 2020-01-01T00:00"));
+    assert!(!check_time(b"time < 2014-01-01T00:00"));
+    assert!(!check_time(b"account = 3735928559"));
 }
 
 #[test]
@@ -189,7 +189,7 @@ fn third_party_macaroons() {
     // "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA027FAuBYhtHwJ58FX6UlVNFtFsGxQHS7uD_w_dedwv4Jjw7UorCREw5rXbRqIKhr"
     // We don't do that here, so can't actually verify that the signatures match perfectly.
     match &mac.third_party_caveats()[0] {
-        Caveat::FirstParty(_) => assert!(false),
+        Caveat::FirstParty(_) => panic!("expected a third-party caveat"),
         Caveat::ThirdParty(tp) => {
             assert_eq!(tp.location(), "http://auth.mybank/");
             assert_eq!(tp.id(), b"this was how we remind auth of key/pred");

@@ -128,9 +128,13 @@ This version includes several breaking changes from 0.2.x:
   `&str`, or `impl AsRef<[u8]>` instead of `ByteString`.
 - **`MacaroonKey`** — Now uses `ZeroizeOnDrop` to clear key material on drop,
   constant-time equality (`ConstantTimeEq`), and a redacted `Debug` impl. No
-  longer implements `Copy` or `DerefMut` (use `.clone()` for explicit copies).
-  New constructors: `MacaroonKey::generate_random()` and
-  `MacaroonKey::generate(seed)`.
+  longer implements `Copy`, `DerefMut`, or `Deref` (the `Deref<[u8]>` impl
+  was removed to keep `Debug` redaction effective — use `.as_ref()` to get a
+  byte slice). `to_vec()` was removed (it leaked un-zeroized `Vec<u8>`). Use
+  `.clone()` for explicit copies.
+- **`MacaroonKey::generate_random()`** now returns `Result<MacaroonKey>` and
+  can fail with `MacaroonError::RngError` when the OS RNG (or the browser's
+  `crypto.getRandomValues` in WASM) is unavailable, instead of panicking.
 - **`Macaroon` accessor changes:**
   - `identifier()` returns `&[u8]` (was `ByteString`)
   - `location()` returns `Option<&str>` (was `Option<String>`)
@@ -138,19 +142,37 @@ This version includes several breaking changes from 0.2.x:
   - `caveats()` returns `&[Caveat]` (was `Vec<Caveat>`)
   - `first_party_caveats()` / `third_party_caveats()` return `Vec<&Caveat>` (was `Vec<Caveat>`)
 - **`Macaroon::create()`** — Identifier parameter now accepts `impl AsRef<[u8]>` (was `ByteString`).
+  Now validates that the identifier and (optional) location are within
+  `MAX_FIELD_SIZE_BYTES`, returning `MacaroonError::FieldTooLarge` if not.
 - **`add_first_party_caveat()`** — Predicate now accepts `impl AsRef<[u8]>` (was `ByteString`).
-  Now returns `Result<()>` and fails with `MacaroonError::TooManyCaveats` if the
-  per-macaroon caveat cap (1000) is exceeded.
+  Returns `Result<()>` and can fail with `MacaroonError::TooManyCaveats` (per-macaroon cap of 1000)
+  or `MacaroonError::FieldTooLarge` (per-field cap of 65535 bytes).
 - **`add_third_party_caveat()`** — ID now accepts `impl AsRef<[u8]>` (was `ByteString`).
-  Now returns `Result<()>` and fails with `MacaroonError::TooManyCaveats` if the
-  per-macaroon caveat cap (1000) is exceeded.
+  Returns `Result<()>` and can fail with `MacaroonError::TooManyCaveats`,
+  `MacaroonError::FieldTooLarge`, or `MacaroonError::RngError` (the nonce
+  used to encrypt the caveat key requires the OS RNG).
 - **`Verifier::verify()`** — Discharges parameter is now `&[Macaroon]` (was `Vec<Macaroon>`).
 - **`Verifier::satisfy_exact()`** — Now accepts `impl AsRef<[u8]>` (was `ByteString`).
-- **`Verifier::satisfy_general()`** — Now accepts closures (`Fn(&[u8]) -> bool`)
-  instead of only function pointers. `VerifyFunc` type alias removed.
+- **`Verifier::satisfy_general()`** — Now accepts closures (`Fn(&[u8]) -> bool + Send + Sync + 'static`)
+  instead of only function pointers. The `Send + Sync` bound lets `&Verifier`
+  be shared across threads (typical HTTP server pattern). `VerifyFunc` type
+  alias removed.
 - **`Caveat` sub-types exported** — `FirstParty` and `ThirdParty` are now public.
   Their accessors return `&[u8]` and `&str` instead of owned types.
+- **New public constants** — `MAX_CAVEATS` (1000) and `MAX_FIELD_SIZE_BYTES`
+  (65535) are now re-exported so downstream callers can reason about the
+  same limits the crate enforces.
+- **New error variants** — `MacaroonError::FieldTooLarge { field, size }`
+  and `MacaroonError::RngError(&'static str)`.
 - **`MacaroonError::InitializationError` removed** — No longer applicable.
+- **V2JSON base64 interop** — `i64`, `v64`, `l64`, `s64` fields are now
+  emitted as URL-safe base64 without padding (matching libmacaroons /
+  pymacaroons wire format) and the decoder accepts both URL-safe and
+  standard alphabets, padded or unpadded.
+- **Crypto backend** — migrated from the unmaintained `xsalsa20poly1305`
+  crate to `crypto_secretbox` (the RustCrypto-recommended successor). Same
+  XSalsa20-Poly1305 algorithm and wire format, so first-party and
+  third-party signatures are unchanged.
 
 ## Backwards compatibility
 

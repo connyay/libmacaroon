@@ -5,7 +5,7 @@ use crate::{ByteString, Macaroon, MacaroonKey, Result, MAX_CAVEATS};
 pub struct MacaroonBuilder {
     identifier: ByteString,
     location: Option<String>,
-    signature: MacaroonKey,
+    signature: Option<MacaroonKey>,
     caveats: Vec<Caveat>,
 }
 
@@ -14,9 +14,7 @@ impl MacaroonBuilder {
         MacaroonBuilder {
             identifier: Default::default(),
             location: None,
-            // Zero-valued sentinel: `build()` rejects a signature that was never
-            // set, which `is_empty()` detects only if the initial value is zero.
-            signature: MacaroonKey::from([0u8; 32]),
+            signature: None,
             caveats: Default::default(),
         }
     }
@@ -33,8 +31,13 @@ impl MacaroonBuilder {
         self.location.is_some()
     }
 
+    /// Sets the signature from a 32-byte slice. Callers (the V1/V2/V2JSON
+    /// deserializers) are responsible for length-checking before calling —
+    /// panics if `signature.len() != 32`.
     pub fn set_signature(&mut self, signature: &[u8]) {
-        self.signature.copy_from_slice(signature);
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(signature);
+        self.signature = Some(MacaroonKey::from(arr));
     }
 
     pub fn add_caveat(&mut self, caveat: Caveat) -> Result<()> {
@@ -49,14 +52,15 @@ impl MacaroonBuilder {
         if self.identifier.0.is_empty() {
             return Err(MacaroonError::IncompleteMacaroon("no identifier found"));
         }
-        if self.signature.is_empty() {
-            return Err(MacaroonError::IncompleteMacaroon("no signature found"));
-        }
+        let signature = self
+            .signature
+            .clone()
+            .ok_or(MacaroonError::IncompleteMacaroon("no signature found"))?;
 
         Ok(Macaroon {
             identifier: self.identifier.clone(),
             location: self.location.clone(),
-            signature: self.signature.clone(),
+            signature,
             caveats: self.caveats.clone(),
         })
     }

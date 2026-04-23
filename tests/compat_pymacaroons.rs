@@ -126,11 +126,15 @@ fn test_serializing_max_length_packet() {
 
 #[test]
 fn test_serializing_too_long_packet() {
+    // The V1 packet header is four hex digits, capping a packet at 0xFFFF
+    // bytes. Rather than silently truncate at serialize time, the crate
+    // rejects oversized fields at construction.
     let root_key = MacaroonKey::generate(b"blah");
     let mut mac = Macaroon::create(Some("test".into()), &root_key, "secret").unwrap();
-    mac.add_first_party_caveat(vec![b'x'; 65527]).unwrap();
-    // TODO: implement a max size check
-    //assert!(mac.serialize(Format::V2).is_err());
+    let err = mac
+        .add_first_party_caveat(vec![b'x'; macaroon::MAX_FIELD_SIZE_BYTES + 1])
+        .unwrap_err();
+    assert!(matches!(err, MacaroonError::FieldTooLarge { .. }));
 }
 
 #[test]

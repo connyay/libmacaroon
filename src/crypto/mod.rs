@@ -8,7 +8,6 @@ pub(crate) mod rustcrypto;
 use crate::Result;
 use rustcrypto::RustCryptoBackend;
 use std::borrow::Borrow;
-use std::ops::Deref;
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -21,7 +20,9 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 ///
 /// Key material is zeroized on drop (`ZeroizeOnDrop`) and compared in constant
 /// time (`ConstantTimeEq`) to prevent timing side-channel attacks. The `Debug`
-/// implementation is redacted.
+/// implementation is redacted and there is no `Deref` into the raw bytes —
+/// callers must go through [`AsRef`] to get a byte slice, which makes key
+/// exposure an explicit choice rather than an accidental one.
 ///
 /// ## Creation
 ///
@@ -33,7 +34,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// use base64::{engine::general_purpose::STANDARD, Engine as _};
 ///
 /// // generate a new random key from scratch
-/// let fresh_key = MacaroonKey::generate_random();
+/// let fresh_key = MacaroonKey::generate_random()?;
 ///
 /// // generate from a byte string
 /// let weak_example_key = MacaroonKey::generate(b"some-secret-here");
@@ -80,14 +81,6 @@ impl Borrow<[u8; 32]> for MacaroonKey {
     }
 }
 
-impl Deref for MacaroonKey {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl From<[u8; 32]> for MacaroonKey {
     /// Uses bytes directly as a MacaroonKey (with no HMAC)
     fn from(b: [u8; 32]) -> Self {
@@ -105,11 +98,14 @@ impl From<&[u8; 32]> for MacaroonKey {
 impl MacaroonKey {
     /// Generate a new random key, using a secure random number generator.
     ///
+    /// Returns `Err(MacaroonError::RngError)` if the OS RNG (or the
+    /// `crypto.getRandomValues` API on WASM) is unavailable.
+    ///
     /// ```rust
     /// # use macaroon::MacaroonKey;
-    /// let key = MacaroonKey::generate_random();
+    /// let key = MacaroonKey::generate_random().expect("OS RNG available");
     /// ```
-    pub fn generate_random() -> Self {
+    pub fn generate_random() -> Result<Self> {
         RustCryptoBackend::generate_random_key()
     }
 
@@ -125,17 +121,6 @@ impl MacaroonKey {
     /// ```
     pub fn generate(seed: &[u8]) -> Self {
         generate_derived_key(seed)
-    }
-
-    /// Check if key is empty (all zeros)
-    pub fn is_empty(&self) -> bool {
-        self.0.iter().all(|&b| b == 0)
-    }
-
-    /// Overwrite the key bytes in place. Crate-internal; prevents external
-    /// callers from mutating an existing key via a safe API.
-    pub(crate) fn copy_from_slice(&mut self, bytes: &[u8]) {
-        self.0.copy_from_slice(bytes);
     }
 }
 
@@ -163,8 +148,11 @@ where
     RustCryptoBackend::hmac2(key, text1, text2)
 }
 
-/// Encrypt key material using authenticated encryption (XSalsa20-Poly1305)
-pub fn encrypt_key<T>(key: &T, plaintext: &T) -> Vec<u8>
+/// Encrypt key material using authenticated encryption (XSalsa20-Poly1305).
+///
+/// Fallible because the nonce is freshly random per call: a failing OS RNG
+/// yields `MacaroonError::RngError` instead of panicking.
+pub fn encrypt_key<T>(key: &T, plaintext: &T) -> Result<Vec<u8>>
 where
     T: AsRef<[u8; 32]> + ?Sized,
 {

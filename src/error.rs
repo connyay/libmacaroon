@@ -34,6 +34,24 @@ pub enum MacaroonError {
     /// deserializing a token, would exceed the maximum allowed number of
     /// caveats. Protects against memory exhaustion from pathological inputs.
     TooManyCaveats,
+
+    /// Arises when a field (identifier, location, predicate, third-party caveat
+    /// id) would exceed [`MAX_FIELD_SIZE_BYTES`](crate::MAX_FIELD_SIZE_BYTES).
+    /// Applied on construction and deserialization so producer and consumer
+    /// agree: a macaroon that this crate serializes can always be parsed back.
+    FieldTooLarge {
+        /// The name of the field that was too large (e.g. `"identifier"`,
+        /// `"predicate"`).
+        field: &'static str,
+        /// The actual size, in bytes.
+        size: usize,
+    },
+
+    /// The operating system (or JavaScript `crypto.getRandomValues`) failed to
+    /// provide random bytes. Surfaces from
+    /// [`MacaroonKey::generate_random`](crate::MacaroonKey::generate_random)
+    /// and [`Macaroon::add_third_party_caveat`](crate::Macaroon::add_third_party_caveat).
+    RngError(&'static str),
 }
 
 impl From<serde_json::Error> for MacaroonError {
@@ -103,6 +121,16 @@ impl std::fmt::Display for MacaroonError {
                 "Macaroon exceeds the maximum allowed number of caveats ({})",
                 crate::MAX_CAVEATS
             ),
+            MacaroonError::FieldTooLarge { field, size } => write!(
+                f,
+                "Macaroon field `{}` is {} bytes, exceeds the maximum of {} bytes",
+                field,
+                size,
+                crate::MAX_FIELD_SIZE_BYTES
+            ),
+            MacaroonError::RngError(s) => {
+                write!(f, "Failed to obtain random bytes from the OS RNG: {}", s)
+            }
         }
     }
 }

@@ -6,16 +6,13 @@
 use super::MacaroonKey;
 use crate::error::MacaroonError;
 use crate::Result;
-use hmac::{Hmac, Mac};
-use log::error;
-use sha2::Sha256;
-use xsalsa20poly1305::{
+use crypto_secretbox::{
     aead::{Aead, KeyInit},
     Key as AeadKey, Nonce, XSalsa20Poly1305,
 };
-
-#[cfg(not(target_arch = "wasm32"))]
-use rand::RngCore;
+use hmac::{Hmac, Mac};
+use log::error;
+use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -48,26 +45,27 @@ impl RustCryptoBackend {
         Self::hmac(key, &tmp)
     }
 
-    pub fn encrypt_key<T>(key: &T, plaintext: &T) -> Vec<u8>
+    pub fn encrypt_key<T>(key: &T, plaintext: &T) -> Result<Vec<u8>>
     where
         T: AsRef<[u8; 32]> + ?Sized,
     {
         let cipher = XSalsa20Poly1305::new(AeadKey::from_slice(key.as_ref()));
 
-        // Generate a random 24-byte nonce
+        // Random 24-byte nonce. XSalsa20-Poly1305's 192-bit nonce makes
+        // collision under random generation negligible (birthday bound 2^96).
         let mut nonce_bytes = [0u8; 24];
-        Self::fill_random(&mut nonce_bytes);
+        Self::fill_random(&mut nonce_bytes)?;
         let nonce = Nonce::from(nonce_bytes);
 
         let ciphertext = cipher
             .encrypt(&nonce, plaintext.as_ref() as &[u8])
-            .expect("encryption should not fail");
+            .map_err(|_| MacaroonError::CryptoError("encryption failed"))?;
 
-        // nonce || ciphertext (matches libmacaroons secretbox format)
+        // nonce || ciphertext (NaCl secretbox wire format, matches libmacaroons)
         let mut result = Vec::with_capacity(24 + ciphertext.len());
         result.extend_from_slice(&nonce);
         result.extend_from_slice(&ciphertext);
-        result
+        Ok(result)
     }
 
     pub fn decrypt_key<T, U>(key: &T, data: &U) -> Result<MacaroonKey>
@@ -116,22 +114,19 @@ impl RustCryptoBackend {
         }
     }
 
-    pub fn generate_random_key() -> MacaroonKey {
+    pub fn generate_random_key() -> Result<MacaroonKey> {
         let mut key_bytes = [0u8; 32];
-        Self::fill_random(&mut key_bytes);
-        MacaroonKey::from(key_bytes)
+        Self::fill_random(&mut key_bytes)?;
+        Ok(MacaroonKey::from(key_bytes))
     }
 
-    fn fill_random(buf: &mut [u8]) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            getrandom::getrandom(buf).expect("failed to generate random bytes");
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            rand::thread_rng().fill_bytes(buf);
-        }
+    fn fill_random(buf: &mut [u8]) -> Result<()> {
+        // `getrandom` works on both native (via OS RNG) and
+        // wasm32-unknown-unknown with the `js` feature enabled (via
+        // `crypto.getRandomValues`). A failure here is propagated up instead
+        // of aborting, which matters on WASM: a sandboxed iframe with no
+        // `crypto` global would otherwise crash the whole module.
+        getrandom::getrandom(buf).map_err(|_| MacaroonError::RngError("getrandom failed"))
     }
 }
 
@@ -149,7 +144,7 @@ mod test {
         key_bytes[..21].copy_from_slice(b"This is my secret key");
         let key = MacaroonKey::from(key_bytes);
 
-        let encrypted = RustCryptoBackend::encrypt_key(&key, &secret);
+        let encrypted = RustCryptoBackend::encrypt_key(&key, &secret).unwrap();
         let decrypted = RustCryptoBackend::decrypt_key(&key, &encrypted).unwrap();
         assert_eq!(secret, decrypted);
     }
@@ -190,8 +185,8 @@ mod test {
 
     #[test]
     fn test_random_key_generation() {
-        let key1 = RustCryptoBackend::generate_random_key();
-        let key2 = RustCryptoBackend::generate_random_key();
+        let key1 = RustCryptoBackend::generate_random_key().unwrap();
+        let key2 = RustCryptoBackend::generate_random_key().unwrap();
 
         // Keys should be different
         assert_ne!(key1, key2);

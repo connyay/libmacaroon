@@ -118,6 +118,15 @@ pub(crate) const URL_SAFE: GeneralPurpose = GeneralPurpose::new(
     &alphabet::URL_SAFE,
     GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
 );
+/// Used on the emit side for V2JSON fields (`i64`, `v64`, `s64`) so our
+/// output matches what libmacaroons/pymacaroons produce: URL-safe alphabet,
+/// no `=` padding. The decode side tolerates both padded and unpadded.
+pub(crate) const URL_SAFE_NO_PAD: GeneralPurpose = GeneralPurpose::new(
+    &alphabet::URL_SAFE,
+    GeneralPurposeConfig::new()
+        .with_encode_padding(false)
+        .with_decode_padding_mode(DecodePaddingMode::Indifferent),
+);
 
 mod caveat;
 mod crypto;
@@ -140,12 +149,24 @@ pub type Result<T> = std::result::Result<T, MacaroonError>;
 /// Maximum number of caveats allowed on a single macaroon. Applied on both
 /// construction (`add_first_party_caveat`, `add_third_party_caveat`) and
 /// deserialization to bound memory and verification work.
-pub(crate) const MAX_CAVEATS: usize = 1000;
+pub const MAX_CAVEATS: usize = 1000;
 
 /// Maximum byte length accepted for any single field (identifier, location,
-/// predicate, VID, signature) during deserialization. Bounds memory and
-/// parsing work on untrusted input.
-pub(crate) const MAX_FIELD_SIZE_BYTES: usize = 65535;
+/// predicate, VID, signature) during construction and deserialization.
+///
+/// Bounds memory and parsing work on untrusted input, and ensures the V1
+/// packet format (whose size header is four hex digits, capping a packet at
+/// `0xFFFF` bytes) can represent every macaroon this crate produces. The cap
+/// applies symmetrically: a macaroon that this crate can serialize is always
+/// one this crate can parse back.
+pub const MAX_FIELD_SIZE_BYTES: usize = 65535;
+
+pub(crate) fn check_field_size(field: &'static str, size: usize) -> Result<()> {
+    if size > MAX_FIELD_SIZE_BYTES {
+        return Err(MacaroonError::FieldTooLarge { field, size });
+    }
+    Ok(())
+}
 
 // Internal type representing binary data. By spec, most fields in a macaroon
 // support binary encoded as base64.
@@ -196,7 +217,10 @@ impl From<[u8; 32]> for ByteString {
 
 impl fmt::Display for ByteString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", STANDARD.encode(&self.0))
+        // Emit URL-safe base64 without padding — matches libmacaroons /
+        // pymacaroons V2JSON output, which is the wire format these fields
+        // (`i64`, `v64`) travel in.
+        write!(f, "{}", URL_SAFE_NO_PAD.encode(&self.0))
     }
 }
 
@@ -222,10 +246,12 @@ impl<'de> Visitor<'de> for ByteStringVisitor {
     where
         E: serde::de::Error,
     {
-        let raw = match STANDARD.decode(value) {
-            Ok(v) => v,
-            Err(_) => return Err(E::custom("unable to base64 decode value")),
-        };
+        // Tolerate both standard and URL-safe alphabets, padded or unpadded:
+        // libmacaroons and pymacaroons emit URL-safe no-pad, but some clients
+        // use the standard alphabet. Accepting both here fixes a real interop
+        // break on V2JSON `i64` / `v64` fields.
+        let raw = base64_decode_flexible(value.as_bytes())
+            .map_err(|_| E::custom("unable to base64 decode value"))?;
         Ok(ByteString(raw))
     }
 }
@@ -282,17 +308,24 @@ pub struct Macaroon {
 impl Macaroon {
     /// Construct a macaroon, given a location and identifier, and a key to sign
     /// it with. You can use a bare str or &[u8] containing arbitrary data with
-    /// `into` to automatically generate a suitable key
+    /// `into` to automatically generate a suitable key.
     ///
     /// # Errors
     ///
-    /// Returns `MacaroonError::IncompleteMacaroon` if the identifier bytestring is empty
+    /// - [`MacaroonError::IncompleteMacaroon`] if the identifier is empty.
+    /// - [`MacaroonError::FieldTooLarge`] if the identifier or location
+    ///   exceeds [`MAX_FIELD_SIZE_BYTES`].
     pub fn create(
         location: Option<String>,
         key: &MacaroonKey,
         identifier: impl AsRef<[u8]>,
     ) -> Result<Macaroon> {
-        let identifier = ByteString(identifier.as_ref().to_vec());
+        let identifier_bytes = identifier.as_ref();
+        check_field_size("identifier", identifier_bytes.len())?;
+        if let Some(loc) = &location {
+            check_field_size("location", loc.len())?;
+        }
+        let identifier = ByteString(identifier_bytes.to_vec());
         let signature = crypto::hmac(key, &identifier);
         let macaroon = Macaroon {
             location,
@@ -352,10 +385,10 @@ impl Macaroon {
         if self.identifier.0.is_empty() {
             return Err(MacaroonError::IncompleteMacaroon("no identifier found"));
         }
-        if self.signature.is_empty() {
-            return Err(MacaroonError::IncompleteMacaroon("no signature found"));
-        }
-
+        // The `signature` field is required by the struct definition and is
+        // always produced by `crypto::hmac` during construction or set from a
+        // validated 32-byte field during deserialization, so there is no
+        // "missing signature" state to guard against here.
         Ok(self)
     }
 
@@ -368,12 +401,15 @@ impl Macaroon {
     ///
     /// # Errors
     ///
-    /// Returns [`MacaroonError::TooManyCaveats`] if adding this caveat would
-    /// exceed the [`MAX_CAVEATS`] limit.
+    /// - [`MacaroonError::TooManyCaveats`] if adding this caveat would exceed
+    ///   the [`MAX_CAVEATS`] limit.
+    /// - [`MacaroonError::FieldTooLarge`] if the predicate exceeds
+    ///   [`MAX_FIELD_SIZE_BYTES`].
     pub fn add_first_party_caveat(&mut self, predicate: impl AsRef<[u8]>) -> Result<()> {
+        let predicate_bytes = predicate.as_ref();
+        check_field_size("predicate", predicate_bytes.len())?;
         self.check_caveat_capacity()?;
-        let caveat: caveat::Caveat =
-            caveat::new_first_party(ByteString(predicate.as_ref().to_vec()));
+        let caveat: caveat::Caveat = caveat::new_first_party(ByteString(predicate_bytes.to_vec()));
         self.signature = caveat.sign(&self.signature);
         self.caveats.push(caveat);
         debug!("Macaroon::add_first_party_caveat: {:?}", self);
@@ -387,18 +423,26 @@ impl Macaroon {
     ///
     /// # Errors
     ///
-    /// Returns [`MacaroonError::TooManyCaveats`] if adding this caveat would
-    /// exceed the [`MAX_CAVEATS`] limit.
+    /// - [`MacaroonError::TooManyCaveats`] if adding this caveat would exceed
+    ///   the [`MAX_CAVEATS`] limit.
+    /// - [`MacaroonError::FieldTooLarge`] if the location or id exceeds
+    ///   [`MAX_FIELD_SIZE_BYTES`].
+    /// - [`MacaroonError::RngError`] if the OS RNG fails while generating the
+    ///   nonce used to encrypt the caveat key (can happen in WASM environments
+    ///   without `crypto.getRandomValues`).
     pub fn add_third_party_caveat(
         &mut self,
         location: &str,
         key: &MacaroonKey,
         id: impl AsRef<[u8]>,
     ) -> Result<()> {
+        let id_bytes = id.as_ref();
+        check_field_size("caveat id", id_bytes.len())?;
+        check_field_size("caveat location", location.len())?;
         self.check_caveat_capacity()?;
-        let vid: Vec<u8> = crypto::encrypt_key(&self.signature, key);
+        let vid: Vec<u8> = crypto::encrypt_key(&self.signature, key)?;
         let caveat: caveat::Caveat =
-            caveat::new_third_party(ByteString(id.as_ref().to_vec()), ByteString(vid), location);
+            caveat::new_third_party(ByteString(id_bytes.to_vec()), ByteString(vid), location);
         self.signature = caveat.sign(&self.signature);
         self.caveats.push(caveat);
         debug!("Macaroon::add_third_party_caveat: {:?}", self);
@@ -635,9 +679,9 @@ mod tests {
         assert!(Macaroon::deserialize(b"NDhJe_A==").is_err());
 
         // examples that fail from fuzzing for the top-level deserialize function
-        assert!(Macaroon::deserialize(&vec![10]).is_err());
-        assert!(Macaroon::deserialize(&vec![70, 70, 102, 70]).is_err());
-        assert!(Macaroon::deserialize(&vec![2, 2, 212, 212, 212, 212]).is_err());
+        assert!(Macaroon::deserialize(vec![10]).is_err());
+        assert!(Macaroon::deserialize(vec![70, 70, 102, 70]).is_err());
+        assert!(Macaroon::deserialize(vec![2, 2, 212, 212, 212, 212]).is_err());
     }
 }
 
