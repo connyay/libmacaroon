@@ -110,8 +110,6 @@ impl Verifier {
 
 #[cfg(test)]
 mod tests {
-    extern crate time;
-
     use super::Verifier;
     use crate::{Macaroon, MacaroonError, MacaroonKey};
 
@@ -196,23 +194,20 @@ mod tests {
         verifier.verify(&macaroon, &key, &[]).unwrap_err();
     }
 
+    /// Test helper that parses `"time > YYYY-MM-DDTHH:MM+ZZZZ"` caveats.
+    ///
+    /// Uses a fixed reference instead of the real clock so the tests are
+    /// deterministic and we avoid pulling in a date-parsing dev-dep. ISO
+    /// 8601 fixed-width timestamps compare correctly lexicographically, so
+    /// byte comparison is sufficient.
     fn after_time_verifier(caveat: &[u8]) -> bool {
-        if !caveat.starts_with(b"time > ") {
+        const REFERENCE_NOW: &[u8] = b"2024-01-01T00:00+0000";
+        const PREFIX: &[u8] = b"time > ";
+        if !caveat.starts_with(PREFIX) {
             return false;
         }
-        let strcaveat = match std::str::from_utf8(caveat) {
-            Ok(s) => s,
-            Err(_) => return false,
-        };
-
-        let format = time::format_description::parse(
-            "[year]-[month]-[day]T[hour]:[minute][offset_hour sign:mandatory][offset_minute]",
-        )
-        .unwrap();
-        match time::OffsetDateTime::parse(&strcaveat[7..], &format) {
-            Ok(compare) => time::OffsetDateTime::now_utc() > compare,
-            Err(_) => false,
-        }
+        let when = &caveat[PREFIX.len()..];
+        when.len() == REFERENCE_NOW.len() && when < REFERENCE_NOW
     }
 
     #[test]

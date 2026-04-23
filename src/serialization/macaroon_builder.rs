@@ -2,7 +2,7 @@ use crate::caveat::Caveat;
 use crate::error::MacaroonError;
 use crate::{ByteString, Macaroon, MacaroonKey, Result, MAX_CAVEATS};
 
-pub struct MacaroonBuilder {
+pub(crate) struct MacaroonBuilder {
     identifier: ByteString,
     location: Option<String>,
     signature: Option<MacaroonKey>,
@@ -10,7 +10,7 @@ pub struct MacaroonBuilder {
 }
 
 impl MacaroonBuilder {
-    pub fn new() -> MacaroonBuilder {
+    pub(crate) fn new() -> MacaroonBuilder {
         MacaroonBuilder {
             identifier: Default::default(),
             location: None,
@@ -19,28 +19,28 @@ impl MacaroonBuilder {
         }
     }
 
-    pub fn set_identifier(&mut self, identifier: ByteString) {
+    pub(crate) fn set_identifier(&mut self, identifier: ByteString) {
         self.identifier = identifier;
     }
 
-    pub fn set_location(&mut self, location: &str) {
+    pub(crate) fn set_location(&mut self, location: &str) {
         self.location = Some((*location).to_string());
     }
 
-    pub fn has_location(&self) -> bool {
+    pub(crate) fn has_location(&self) -> bool {
         self.location.is_some()
     }
 
     /// Sets the signature from a 32-byte slice. Callers (the V1/V2/V2JSON
     /// deserializers) are responsible for length-checking before calling —
     /// panics if `signature.len() != 32`.
-    pub fn set_signature(&mut self, signature: &[u8]) {
+    pub(crate) fn set_signature(&mut self, signature: &[u8]) {
         let mut arr = [0u8; 32];
         arr.copy_from_slice(signature);
         self.signature = Some(MacaroonKey::from(arr));
     }
 
-    pub fn add_caveat(&mut self, caveat: Caveat) -> Result<()> {
+    pub(crate) fn add_caveat(&mut self, caveat: Caveat) -> Result<()> {
         if self.caveats.len() >= MAX_CAVEATS {
             return Err(MacaroonError::TooManyCaveats);
         }
@@ -48,7 +48,7 @@ impl MacaroonBuilder {
         Ok(())
     }
 
-    pub fn build(&self) -> Result<Macaroon> {
+    pub(crate) fn build(&self) -> Result<Macaroon> {
         if self.identifier.0.is_empty() {
             return Err(MacaroonError::IncompleteMacaroon("no identifier found"));
         }

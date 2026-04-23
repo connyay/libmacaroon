@@ -37,11 +37,20 @@ Pre-release hardening pass. Several breaking API changes — see README's
   `MacaroonError::RngError`.
 
 **Packaging / CI:**
-- MSRV bumped from 1.56 to 1.60 to match `zeroize 1.8` and
-  `crypto_secretbox 0.1`.
+- MSRV is now 1.71 (was claimed 1.56 but effective MSRV was higher
+  because of transitive deps). 1.71 matches the real floor from
+  `env_logger 0.11` and `quote 1.0.45`.
+- `env_logger` and `time` dev-dependencies removed. `env_logger` was
+  declared but never used; `time` backed a single test helper that
+  now compares ISO-8601 timestamps lexicographically against a fixed
+  reference (equivalent semantics with no dep).
+- Cargo.lock is now committed so `cargo audit` runs reproducibly in CI
+  and everyone gets the same dep set in local dev. Published crate is
+  unaffected (Cargo excludes the lockfile from packaged libraries).
 - CI modernized: `actions/checkout@v4`, `dtolnay/rust-toolchain@stable`,
   `Swatinem/rust-cache@v2`, separate jobs for `fmt`, `clippy -D warnings`,
-  MSRV, WASM target, and `rustsec/audit-check`.
+  MSRV, WASM target, and `rustsec/audit-check`. All build steps now
+  use `--locked`.
 
 **Correctness polish:**
 - V2JSON decoder rejects tokens whose top-level `v` field isn't `2`.

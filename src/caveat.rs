@@ -69,11 +69,11 @@ impl Caveat {
     }
 }
 
-pub fn new_first_party(predicate: ByteString) -> Caveat {
+pub(crate) fn new_first_party(predicate: ByteString) -> Caveat {
     Caveat::FirstParty(FirstParty { predicate })
 }
 
-pub fn new_third_party(id: ByteString, verifier_id: ByteString, location: &str) -> Caveat {
+pub(crate) fn new_third_party(id: ByteString, verifier_id: ByteString, location: &str) -> Caveat {
     Caveat::ThirdParty(ThirdParty {
         id,
         verifier_id,
@@ -82,38 +82,38 @@ pub fn new_third_party(id: ByteString, verifier_id: ByteString, location: &str) 
 }
 
 #[derive(Default)]
-pub struct CaveatBuilder {
+pub(crate) struct CaveatBuilder {
     id: Option<ByteString>,
     verifier_id: Option<ByteString>,
     location: Option<String>,
 }
 
 impl CaveatBuilder {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Default::default()
     }
 
-    pub fn add_id(&mut self, id: ByteString) {
+    pub(crate) fn add_id(&mut self, id: ByteString) {
         self.id = Some(id);
     }
 
-    pub fn has_id(&self) -> bool {
+    pub(crate) fn has_id(&self) -> bool {
         self.id.is_some()
     }
 
-    pub fn add_verifier_id(&mut self, vid: ByteString) {
+    pub(crate) fn add_verifier_id(&mut self, vid: ByteString) {
         self.verifier_id = Some(vid);
     }
 
-    pub fn add_location(&mut self, location: String) {
+    pub(crate) fn add_location(&mut self, location: String) {
         self.location = Some(location);
     }
 
-    pub fn has_location(&self) -> bool {
+    pub(crate) fn has_location(&self) -> bool {
         self.location.is_some()
     }
 
-    pub fn build(self) -> Result<Caveat> {
+    pub(crate) fn build(self) -> Result<Caveat> {
         let id = self
             .id
             .ok_or(MacaroonError::IncompleteCaveat("no identifier found"))?;

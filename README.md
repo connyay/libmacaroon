@@ -230,13 +230,16 @@ same backend works for both native and WASM targets.
 
 ## Minimum Supported Rust Version
 
-This crate supports Rust Language 2021 Edition and currently commits to working
-with stable Rust version 1.56 and later. It requires `std`.
+This crate targets Rust Language 2021 Edition and builds on stable Rust
+1.71 (Jul 2023) and later. The library build (`cargo build`) is the
+contract; `cargo test` pulls in dev-dep transitives that require newer
+editions and isn't part of the MSRV guarantee.
 
-Going forward, it should support every stable version of Rust, and at any given
-time maintain compatibility with stable versions of Rust released in the past 6
-months or so.  In other words, it will not depend on language features or
-syntax just released as stable in the past 6 months.
+MSRV bumps are not considered breaking for 0.x, but we only bump when
+needed, and only to land bug fixes or to keep transitive deps on
+supported versions.
+
+Requires `std`.
 
 ## Contributing
 
