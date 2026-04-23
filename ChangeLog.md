@@ -1,6 +1,6 @@
 # libmacaroon Change Log
 
-## Version 0.2.0 - UNRELEASED (libmacaroon)
+## Version 0.2.0 - 2026-04-23 (libmacaroon)
 
 Ergonomics improvements from first-wave dogfooding feedback. Both
 changes are breaking at call sites, but both are mechanical rewrites.
