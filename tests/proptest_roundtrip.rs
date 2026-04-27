@@ -113,7 +113,11 @@ proptest! {
     fn roundtrip_all_formats(spec in macaroon_spec_strategy()) {
         let (_key, mac) = build(&spec);
 
-        for format in [Format::V1, Format::V2, Format::V2JSON] {
+        #[cfg(feature = "v2json")]
+        let formats = [Format::V1, Format::V2, Format::V2JSON];
+        #[cfg(not(feature = "v2json"))]
+        let formats = [Format::V1, Format::V2];
+        for format in formats {
             let encoded = mac.serialize(format).expect("serialize");
             let decoded = Macaroon::deserialize(&encoded).expect("deserialize");
             prop_assert_eq!(&decoded, &mac, "round-trip mismatch in one of the formats");

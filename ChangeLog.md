@@ -1,6 +1,18 @@
 # libmacaroon Change Log
 
-## Version 0.2.0 - 2026-04-23 (libmacaroon)
+## Version 0.2.1 - 2026-04-27 (libmacaroon)
+
+More dogfooding feedback, this time about binary size: the V2JSON
+serializer pulls in `serde` and `serde_json`, ~50 KB of compiled code
+that callers who only need the binary V1/V2 wire formats don't want.
+
+- New `v2json` feature, **on by default**. With it off
+  (`default-features = false`), `serde` and `serde_json` are not
+  compiled, `Format::V2JSON` is removed from the `Format` enum, and
+  `Macaroon::deserialize` returns `DeserializationError` on a token that
+  starts with `{` instead of attempting to parse it as JSON.
+- If you keep the default features, nothing changes. The V2JSON path
+  is preserved bit-for-bit, public API and all.
 
 Ergonomics improvements from first-wave dogfooding feedback. Both
 changes are breaking at call sites, but both are mechanical rewrites.

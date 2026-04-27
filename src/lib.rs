@@ -121,7 +121,9 @@ pub use error::MacaroonError;
 pub use serialization::Format;
 pub use verifier::Verifier;
 
+#[cfg(feature = "v2json")]
 use serde::de::Visitor;
+#[cfg(feature = "v2json")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
@@ -205,6 +207,7 @@ impl fmt::Display for ByteString {
     }
 }
 
+#[cfg(feature = "v2json")]
 impl Serialize for ByteString {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -214,8 +217,10 @@ impl Serialize for ByteString {
     }
 }
 
+#[cfg(feature = "v2json")]
 struct ByteStringVisitor;
 
+#[cfg(feature = "v2json")]
 impl<'de> Visitor<'de> for ByteStringVisitor {
     type Value = ByteString;
 
@@ -237,6 +242,7 @@ impl<'de> Visitor<'de> for ByteStringVisitor {
     }
 }
 
+#[cfg(feature = "v2json")]
 impl<'de> Deserialize<'de> for ByteString {
     fn deserialize<D>(deserializer: D) -> std::result::Result<ByteString, D::Error>
     where
@@ -471,6 +477,7 @@ impl Macaroon {
         match format {
             serialization::Format::V1 => serialization::v1::serialize(self),
             serialization::Format::V2 => serialization::v2::serialize(self),
+            #[cfg(feature = "v2json")]
             serialization::Format::V2JSON => serialization::v2json::serialize(self),
         }
     }
@@ -493,10 +500,12 @@ impl Macaroon {
     /// // 'b"byte-string"' or slice of 'u8' would also work.
     /// let mac = Macaroon::deserialize("MDAxY2xvY2F0aW9uIGh0dHA6Ly9teWJhbmsvCjAwMjZpZGVudGlmaWVyIHdlIHVzZWQgb3VyIHNlY3JldCBrZXkKMDAxNmNpZCB0ZXN0ID0gY2F2ZWF0CjAwMmZzaWduYXR1cmUgGXusegRK8zMyhluSZuJtSTvdZopmDkTYjOGpmMI9vWcK")?;
     ///
+    /// # #[cfg(feature = "v2json")] {
     /// let mac_v2json = Macaroon::deserialize(r#"{"v":2,"l":"http://example.org/","i":"keyid", "c":[{"i":"account = 3735928559"},{"i":"user = alice"}],"s64": "S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw"}"#)?;
     ///
     /// // expect this to fail; leading whitespace is not allowed
     /// Macaroon::deserialize(r#"   {"v":2,"l":"http://example.org/","i":"keyid", "c":[{"i":"account = 3735928559"},{"i":"user = alice"}],"s64": "S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw"}"#).unwrap_err();
+    /// # }
     /// # Ok(()) }
     /// ```
     pub fn deserialize<T: AsRef<[u8]>>(token: T) -> Result<Macaroon> {
@@ -506,7 +515,14 @@ impl Macaroon {
             ));
         }
         let mac: Macaroon = match token.as_ref()[0] as char {
+            #[cfg(feature = "v2json")]
             '{' => serialization::v2json::deserialize(token.as_ref())?,
+            #[cfg(not(feature = "v2json"))]
+            '{' => {
+                return Err(MacaroonError::DeserializationError(
+                    "V2JSON support is disabled (the `v2json` feature is not enabled)".to_string(),
+                ))
+            }
             _ => {
                 let binary = base64_decode_flexible(token.as_ref())?;
                 Macaroon::deserialize_binary(&binary)?

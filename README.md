@@ -91,6 +91,23 @@ the above process.
 - Verification of both first- and third-party caveats (the latter using
   discharge macaroons)
 
+## Cargo features
+
+- `v2json` *(default)* — V2JSON serialization. Pulls in `serde` and
+  `serde_json`. Disable with `default-features = false` to drop the JSON
+  deserializer (~50 KB of compiled code) when only the binary V1/V2
+  formats are needed:
+
+  ```toml
+  libmacaroon = { version = "0.2", default-features = false }
+  ```
+
+  With the feature off, `Format::V2JSON` is not compiled and
+  `Macaroon::deserialize` returns `DeserializationError` on a token that
+  starts with `{`.
+- `wasm` — enables `getrandom`'s `js` backend so the crate works on
+  `wasm32-unknown-unknown` in browser/Node hosts.
+
 ### Examples
 
 ```rust

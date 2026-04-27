@@ -1,6 +1,6 @@
 [package]
 name = "libmacaroon"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.71"
 authors = [
@@ -18,13 +18,18 @@ categories = ["authentication", "cryptography"]
 license = "MIT"
 
 [features]
-default = []
+default = ["v2json"]
 wasm = ["getrandom/js"]
+# Enables the V2JSON serialization format. Pulls in `serde` (with derives)
+# and `serde_json`. Disable with `default-features = false` to drop the
+# JSON deserializer (~50 KB of compiled code) when only the binary V1/V2
+# formats are needed.
+v2json = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 log = "0.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
 base64 = "0.22"
 
 # Crypto (RustCrypto ecosystem — pure Rust, WASM-compatible)

@@ -59,10 +59,13 @@ fn test_serializing() {
 
     let after_v1 = Macaroon::deserialize(mac.serialize(Format::V1).unwrap()).unwrap();
     let after_v2 = Macaroon::deserialize(mac.serialize(Format::V2).unwrap()).unwrap();
-    let after_v2json = Macaroon::deserialize(mac.serialize(Format::V2JSON).unwrap()).unwrap();
     assert_eq!(mac, after_v1);
     assert_eq!(mac, after_v2);
-    assert_eq!(mac, after_v2json);
+    #[cfg(feature = "v2json")]
+    {
+        let after_v2json = Macaroon::deserialize(mac.serialize(Format::V2JSON).unwrap()).unwrap();
+        assert_eq!(mac, after_v2json);
+    }
 }
 
 #[test]
@@ -76,10 +79,8 @@ fn test_serializing_binary_id() {
 
     let after_v1 = Macaroon::deserialize(mac.serialize(Format::V1).unwrap()).unwrap();
     let after_v2 = Macaroon::deserialize(mac.serialize(Format::V2).unwrap()).unwrap();
-    let after_v2json = Macaroon::deserialize(mac.serialize(Format::V2JSON).unwrap()).unwrap();
     assert_eq!(mac, after_v1);
     assert_eq!(mac, after_v2);
-    assert_eq!(mac, after_v2json);
     println!(
         "v1:\t{:?}\nv2:\t{:?}\nmac:\t{:?}\nraw:\t{:?}",
         after_v1.identifier(),
@@ -90,7 +91,12 @@ fn test_serializing_binary_id() {
     assert_eq!(mac.identifier(), identifier.as_slice());
     assert_eq!(after_v1.identifier(), identifier.as_slice());
     assert_eq!(after_v2.identifier(), identifier.as_slice());
-    assert_eq!(after_v2json.identifier(), identifier.as_slice());
+    #[cfg(feature = "v2json")]
+    {
+        let after_v2json = Macaroon::deserialize(mac.serialize(Format::V2JSON).unwrap()).unwrap();
+        assert_eq!(mac, after_v2json);
+        assert_eq!(after_v2json.identifier(), identifier.as_slice());
+    }
 }
 
 #[test]

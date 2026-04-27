@@ -54,6 +54,7 @@ pub enum MacaroonError {
     RngError(&'static str),
 }
 
+#[cfg(feature = "v2json")]
 impl From<serde_json::Error> for MacaroonError {
     fn from(error: serde_json::Error) -> MacaroonError {
         MacaroonError::DeserializationError(format!("{}", error))
