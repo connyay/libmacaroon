@@ -425,6 +425,16 @@ mod tests {
     }
 
     #[test]
+    fn test_unknown_field_is_escaped_in_error() {
+        // serde names an unknown key verbatim; here it carries a newline and
+        // an ANSI escape that would otherwise land in a log line as is.
+        let token = r#"{"v":2,"i":"keyid","c":[],"s64":"S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw","x\nINFO forged \u001b[0m":1}"#;
+        let message = Macaroon::deserialize(token).unwrap_err().to_string();
+        assert!(!message.contains(['\n', '\u{1b}']), "{:?}", message);
+        assert!(message.contains(r"x\nINFO forged \u{1b}[0m"), "{}", message);
+    }
+
+    #[test]
     fn test_reject_caveat_with_both_i_and_i64() {
         let bad = r#"{"v":2,"i":"keyid","c":[{"i":"x","i64":"eA"}],"s64":"S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw"}"#;
         let err = Macaroon::deserialize(bad).unwrap_err();

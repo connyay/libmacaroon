@@ -52,7 +52,7 @@ impl Verifier {
         for predicate in predicates {
             if !(self.exact.contains(predicate) || self.verify_general(predicate)) {
                 return Err(MacaroonError::CaveatNotSatisfied(format!(
-                    "first party caveat not satisfied: {}",
+                    "first party caveat not satisfied: {:?}",
                     String::from_utf8_lossy(predicate)
                 )));
             }
@@ -441,5 +441,26 @@ mod tests {
             Err(MacaroonError::InvalidSignature)
         ));
         assert_eq!(0, calls.load(SeqCst));
+    }
+
+    /// The predicate quoted in a `CaveatNotSatisfied` message comes from the
+    /// token, and the message is likely to be logged, so it is escaped.
+    #[test]
+    fn test_unsatisfied_predicate_is_escaped() {
+        let key = MacaroonKey::generate(b"this is the key");
+        let mut macaroon = Macaroon::create(None, &key, "testing").unwrap();
+        macaroon
+            .add_first_party_caveat("x\nINFO forged log line")
+            .unwrap();
+        let message = Verifier::default()
+            .verify(&macaroon, &key, &[])
+            .unwrap_err()
+            .to_string();
+        assert!(!message.contains('\n'), "{}", message);
+        assert!(
+            message.contains(r#""x\nINFO forged log line""#),
+            "{}",
+            message
+        );
     }
 }

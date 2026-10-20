@@ -57,7 +57,18 @@ pub enum MacaroonError {
 #[cfg(feature = "v2json")]
 impl From<serde_json::Error> for MacaroonError {
     fn from(error: serde_json::Error) -> MacaroonError {
-        MacaroonError::DeserializationError(format!("{}", error))
+        // serde names an unknown JSON key verbatim, so escape what `{:?}`
+        // would (newlines, other control and bidi characters) to keep a
+        // token from writing raw text into a log line. Quotes and
+        // backslashes stay as they are: serde already escapes what it quotes.
+        let mut message = String::new();
+        for c in error.to_string().chars() {
+            match c {
+                '"' | '\'' | '\\' => message.push(c),
+                _ => message.extend(c.escape_debug()),
+            }
+        }
+        MacaroonError::DeserializationError(message)
     }
 }
 

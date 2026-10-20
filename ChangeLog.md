@@ -39,6 +39,14 @@ authentication bypass.
   caveats. Whether a signature should be bound is now decided by the
   macaroon's position in the tree, as in libmacaroons, instead of by a
   comparison that only an HMAC collision could have tripped.
+- **Token text in error messages is escaped, and malformed input is no
+  longer logged at `error`.** `CaveatNotSatisfied` quoted the predicate
+  raw and serde's unknown-field error quoted the JSON key raw, so a
+  token could put newlines or terminal escapes into whatever logged the
+  error. Both are now escaped as `{:?}` would escape them, and the
+  predicate is shown in quotes. Decryption failures and bad V1
+  signature lengths, which anyone can trigger with a malformed token,
+  log at `debug` instead of `error`. The error is returned either way.
 
 ### Dependencies
 
