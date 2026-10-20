@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Security hardening
+
+Fixes from a pre-release security review. None of them is an
+authentication bypass.
+
+- **V2JSON enforces `MAX_CAVEATS` while parsing.** The `c` array was
+  collected in full before the cap was checked, so a token of empty
+  caveats (`[{},{},...]`) allocated about 50 times its own size: a 3 MB
+  token peaked at 151 MB of heap. Parsing now stops collecting one
+  caveat past the cap and skips the rest of the array without
+  allocating. The error is still `TooManyCaveats`.
+
 ### Dependencies
 
 Security-sensitive dependencies (crypto, RNG, and token parsing) moved
