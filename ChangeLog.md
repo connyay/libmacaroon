@@ -13,6 +13,18 @@ authentication bypass.
   token peaked at 151 MB of heap. Parsing now stops collecting one
   caveat past the cap and skips the rest of the array without
   allocating. The error is still `TooManyCaveats`.
+- **V1 parsing is strict and single-pass.** 0.3.0 set out to give each
+  macaroon one V1 encoding, but the parser still accepted many: any byte
+  in place of a packet's closing newline, a `+` or uppercase digits in
+  the hex size, packets in any order, and `vid` / `cl` packets with no
+  `cid`, which were dropped unread. A token could carry ~128 KB of such
+  payload and still verify. Packets must now come exactly as
+  `location? identifier (cid (vid cl)?)* signature`, with the size in
+  four lowercase hex digits and a newline at the end. libmacaroons,
+  pymacaroons, and this crate all write that form, and their test
+  vectors still parse. The parser also reads one packet at a time
+  instead of splitting the whole token first, which allocated ~8x the
+  token's size before `MAX_CAVEATS` applied.
 
 ### Dependencies
 
