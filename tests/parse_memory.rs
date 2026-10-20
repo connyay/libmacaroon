@@ -84,6 +84,18 @@ fn hostile_tokens_parse_in_bounded_memory() {
         peak
     );
 
+    // V1: an identifier, then empty first-party caveats ("0009cid \n").
+    let mut v1 = b"0011identifier k\n".to_vec();
+    v1.extend(b"0009cid \n".repeat(CAVEATS));
+    let (result, peak) = peak_heap(|| Macaroon::deserialize_binary(&v1));
+    assert!(matches!(result, Err(MacaroonError::TooManyCaveats)));
+    assert!(
+        peak < LIMIT,
+        "V1: {} byte token peaked at {} bytes",
+        v1.len(),
+        peak
+    );
+
     // V2: version, identifier "k", EOS, then caveats with an empty
     // identifier (tag, zero length, EOS).
     let mut v2 = vec![2, 2, 1, b'k', 0];

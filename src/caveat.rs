@@ -97,16 +97,8 @@ impl CaveatBuilder {
         self.id = Some(id);
     }
 
-    pub(crate) fn has_id(&self) -> bool {
-        self.id.is_some()
-    }
-
     pub(crate) fn add_verifier_id(&mut self, vid: ByteString) {
         self.verifier_id = Some(vid);
-    }
-
-    pub(crate) fn has_verifier_id(&self) -> bool {
-        self.verifier_id.is_some()
     }
 
     pub(crate) fn add_location(&mut self, location: String) {

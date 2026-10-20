@@ -79,50 +79,52 @@ pub fn serialize(macaroon: &Macaroon) -> Result<String> {
     Ok(URL_SAFE.encode(&buf))
 }
 
-struct Packet {
-    key: String,
-    value: Vec<u8>,
-}
-
-fn deserialize_as_packets(data: &[u8]) -> Result<Vec<Packet>> {
-    let mut packets = Vec::new();
-    let mut remaining = data;
-    while !remaining.is_empty() {
-        if remaining.len() < 4 {
-            return Err(MacaroonError::DeserializationError(
-                "packet chunk too small to decode".to_string(),
-            ));
-        }
-        let hex: &str = str::from_utf8(&remaining[..4])?;
-        let size: usize = usize::from_str_radix(hex, 16)?;
-        if size > remaining.len() {
-            return Err(MacaroonError::DeserializationError(
-                "packet chunk size larger than token".to_string(),
-            ));
-        }
-        if size <= 4 {
-            return Err(MacaroonError::DeserializationError(
-                "packet chunk size too small".to_string(),
-            ));
-        }
-        let packet_data = &remaining[4..size];
-        let index = split_index(packet_data)?;
-        let (key_slice, value_slice) = packet_data.split_at(index);
-        if value_slice.len() < 2 {
-            return Err(MacaroonError::DeserializationError(
-                "packet value size too small".to_string(),
-            ));
-        }
-        // skip beginning space and terminating \n
-        let value_len = value_slice.len() - 2;
-        check_field_size("v1 packet", value_len)?;
-        packets.push(Packet {
-            key: str::from_utf8(key_slice)?.to_owned(),
-            value: value_slice[1..value_slice.len() - 1].to_vec(),
-        });
-        remaining = &remaining[size..];
+/// Splits the packet at the front of `data` into its key and value,
+/// returning them with the rest of the input.
+///
+/// Only the encoding the serializer writes is accepted, so a packet has one
+/// byte representation: a size of exactly four lowercase hex digits covering
+/// the whole packet, then `key SP value LF`.
+fn next_packet(data: &[u8]) -> Result<(&str, &[u8], &[u8])> {
+    if data.len() < HEADER_SIZE {
+        return Err(MacaroonError::DeserializationError(
+            "packet chunk too small to decode".to_string(),
+        ));
     }
-    Ok(packets)
+    let mut size: usize = 0;
+    for &digit in &data[..HEADER_SIZE] {
+        let nibble = match digit {
+            b'0'..=b'9' => digit - b'0',
+            b'a'..=b'f' => digit - b'a' + 10,
+            _ => {
+                return Err(MacaroonError::DeserializationError(
+                    "packet size is not four lowercase hex digits".to_string(),
+                ));
+            }
+        };
+        size = (size << 4) | usize::from(nibble);
+    }
+    if size > data.len() {
+        return Err(MacaroonError::DeserializationError(
+            "packet chunk size larger than token".to_string(),
+        ));
+    }
+    // The shortest packet is the header followed by " \n".
+    if size < HEADER_SIZE + 2 {
+        return Err(MacaroonError::DeserializationError(
+            "packet chunk size too small".to_string(),
+        ));
+    }
+    let (packet, rest) = data.split_at(size);
+    let Some((&b'\n', body)) = packet[HEADER_SIZE..].split_last() else {
+        return Err(MacaroonError::DeserializationError(
+            "packet not terminated by a newline".to_string(),
+        ));
+    };
+    let index = split_index(body)?;
+    let value = &body[index + 1..];
+    check_field_size("v1 packet", value.len())?;
+    Ok((str::from_utf8(&body[..index])?, value, rest))
 }
 
 fn split_index(packet: &[u8]) -> Result<usize> {
@@ -135,50 +137,65 @@ fn split_index(packet: &[u8]) -> Result<usize> {
 }
 
 /// Takes a binary token (not base64-encoded)
+///
+/// Packets must come in the order the serializer writes them,
+/// `location? identifier (cid (vid cl)?)* signature`, and are read one at a
+/// time, so the caveat cap bounds memory and no packet goes unread.
 pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
     let mut builder: MacaroonBuilder = MacaroonBuilder::new();
-    let mut caveat_builder: CaveatBuilder = CaveatBuilder::new();
-    let mut seen_location = false;
-    let mut seen_identifier = false;
-    let mut seen_signature = false;
-    for packet in deserialize_as_packets(data)? {
-        // The signature must be the last packet: anything after it would be
-        // silently dropped otherwise, letting one token have several byte
-        // representations (and other implementations parse it differently).
-        if seen_signature {
-            return Err(MacaroonError::DeserializationError(String::from(
-                "packet found after signature",
-            )));
+    let (mut key, mut value, mut remaining) = next_packet(data)?;
+    if key == LOCATION {
+        builder.set_location(str::from_utf8(value)?);
+        (key, value, remaining) = next_packet(remaining)?;
+    }
+    if key != IDENTIFIER {
+        return Err(MacaroonError::DeserializationError(String::from(
+            "identifier packet not found",
+        )));
+    }
+    builder.set_identifier(ByteString::from(value));
+
+    // A caveat's `cid` is held until the next packet shows whether `vid` and
+    // `cl` follow it (third party) or not (first party).
+    let mut caveat: Option<CaveatBuilder> = None;
+    loop {
+        if remaining.is_empty() {
+            return Err(MacaroonError::IncompleteMacaroon("no signature found"));
         }
-        match packet.key.as_str() {
-            LOCATION => {
-                if seen_location {
-                    return Err(MacaroonError::DeserializationError(String::from(
-                        "duplicate location packet",
-                    )));
+        (key, value, remaining) = next_packet(remaining)?;
+        match key {
+            CID => {
+                if let Some(first_party) = caveat.take() {
+                    builder.add_caveat(first_party.build()?)?;
                 }
-                seen_location = true;
-                builder.set_location(&String::from_utf8(packet.value)?);
+                let mut next = CaveatBuilder::new();
+                next.add_id(ByteString::from(value));
+                caveat = Some(next);
             }
-            IDENTIFIER => {
-                if seen_identifier {
+            VID => {
+                let Some(mut third_party) = caveat.take() else {
                     return Err(MacaroonError::DeserializationError(String::from(
-                        "duplicate identifier packet",
+                        "vid packet not preceded by a cid packet",
+                    )));
+                };
+                third_party.add_verifier_id(ByteString::from(value));
+                (key, value, remaining) = next_packet(remaining)?;
+                if key != CL {
+                    return Err(MacaroonError::DeserializationError(String::from(
+                        "vid packet not followed by a cl packet",
                     )));
                 }
-                seen_identifier = true;
-                builder.set_identifier(ByteString(packet.value));
+                third_party.add_location(str::from_utf8(value)?.to_string());
+                builder.add_caveat(third_party.build()?)?;
             }
             SIGNATURE => {
-                seen_signature = true;
-                if caveat_builder.has_id() {
-                    builder.add_caveat(caveat_builder.build()?)?;
-                    caveat_builder = CaveatBuilder::new();
+                if let Some(first_party) = caveat.take() {
+                    builder.add_caveat(first_party.build()?)?;
                 }
-                if packet.value.len() != 32 {
+                if value.len() != 32 {
                     error!(
                         "deserialize_v1: Deserialization error - signature length is {}",
-                        packet.value.len()
+                        value.len()
                     );
                     return Err(MacaroonError::DeserializationError(String::from(
                         "Illegal signature \
@@ -186,41 +203,29 @@ pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
                          packet",
                     )));
                 }
-                builder.set_signature(&packet.value);
-            }
-            CID => {
-                if caveat_builder.has_id() {
-                    builder.add_caveat(caveat_builder.build()?)?;
-                    caveat_builder = CaveatBuilder::new();
-                    caveat_builder.add_id(ByteString(packet.value));
-                } else {
-                    caveat_builder.add_id(ByteString(packet.value));
-                }
-            }
-            VID => {
-                if caveat_builder.has_verifier_id() {
+                builder.set_signature(value);
+                // The signature must be the last packet: anything after it
+                // would go unread, giving one macaroon several encodings.
+                if !remaining.is_empty() {
                     return Err(MacaroonError::DeserializationError(String::from(
-                        "duplicate vid packet in caveat",
+                        "packet found after signature",
                     )));
                 }
-                caveat_builder.add_verifier_id(ByteString(packet.value));
+                return builder.build();
             }
-            CL => {
-                if caveat_builder.has_location() {
-                    return Err(MacaroonError::DeserializationError(String::from(
-                        "duplicate cl packet in caveat",
-                    )));
-                }
-                caveat_builder.add_location(String::from_utf8(packet.value)?)
+            LOCATION | IDENTIFIER | CL => {
+                return Err(MacaroonError::DeserializationError(format!(
+                    "unexpected {} packet",
+                    key
+                )));
             }
             _ => {
                 return Err(MacaroonError::DeserializationError(String::from(
                     "Unknown key",
                 )));
             }
-        };
+        }
     }
-    builder.build()
 }
 
 #[cfg(test)]
@@ -356,32 +361,70 @@ mod tests {
         assert!(err.to_string().contains("after signature"), "{}", err);
     }
 
+    /// Serializes `(tag, value)` pairs back to back into a binary V1 token.
+    fn packets(list: &[(&str, &[u8])]) -> Vec<u8> {
+        list.iter()
+            .flat_map(|&(tag, value)| super::serialize_as_packet(tag, value).unwrap())
+            .collect()
+    }
+
+    /// Anything out of `location? identifier (cid (vid cl)?)* signature` order
+    /// is rejected: duplicates, reorderings, and `vid` / `cl` packets with no
+    /// `cid`, which used to be dropped unread.
     #[test]
-    fn test_duplicate_packets_rejected() {
+    fn test_packet_order_enforced() {
+        let loc: (&str, &[u8]) = (super::LOCATION, b"http://example.org/");
+        let id: (&str, &[u8]) = (super::IDENTIFIER, b"keyid");
+        let cid: (&str, &[u8]) = (super::CID, b"caveat");
+        let vid: (&str, &[u8]) = (super::VID, b"vid-bytes");
+        let cl: (&str, &[u8]) = (super::CL, b"http://auth/");
+        let sig: (&str, &[u8]) = (super::SIGNATURE, &[7; 32]);
+
+        let ok = super::deserialize(&packets(&[loc, id, cid, vid, cl, cid, sig])).unwrap();
+        assert_eq!(2, ok.caveats().len());
+
+        for (list, expected) in [
+            (vec![loc, loc, id, sig], "identifier packet not found"),
+            (vec![cid, id, sig], "identifier packet not found"),
+            (vec![id, loc, sig], "unexpected location packet"),
+            (vec![id, id, sig], "unexpected identifier packet"),
+            (vec![id, vid, cl, sig], "vid packet not preceded by a cid"),
+            (vec![id, cl, sig], "unexpected cl packet"),
+            (vec![id, cid, cl, vid, sig], "unexpected cl packet"),
+            (vec![id, cid, vid, sig], "vid packet not followed by a cl"),
+            (
+                vec![id, cid, vid, cl, vid, cl, sig],
+                "vid packet not preceded by a cid",
+            ),
+            (vec![id, cid, vid, cl, cl, sig], "unexpected cl packet"),
+        ] {
+            let err = super::deserialize(&packets(&list)).unwrap_err();
+            assert!(err.to_string().contains(expected), "{:?}: {}", list, err);
+        }
+    }
+
+    /// A packet has one encoding: a lowercase hex size, then `key SP value LF`.
+    #[test]
+    fn test_noncanonical_packets_rejected() {
         let key = MacaroonKey::generate(b"key");
         let macaroon = Macaroon::create(Some("http://example.org/"), &key, "keyid").unwrap();
         let binary = super::serialize_binary(&macaroon).unwrap();
+        assert_eq!(macaroon, super::deserialize(&binary).unwrap());
+        let (identifier_at, signature_at) = (0x21, 0x21 + 0x15);
+        assert_eq!(b"0015", &binary[identifier_at..identifier_at + 4]);
+        assert_eq!(b"002f", &binary[signature_at..signature_at + 4]);
 
-        // duplicate location / identifier before the rest of the token
-        for tag in [super::LOCATION, super::IDENTIFIER] {
-            let mut dup = super::serialize_as_packet(tag, b"http://example.org/").unwrap();
-            dup.extend(&binary);
-            let err = super::deserialize(&dup).unwrap_err();
-            assert!(err.to_string().contains("duplicate"), "{}", err);
-        }
-
-        // duplicate vid / cl within a caveat
-        for tag in [super::VID, super::CL] {
-            let mut dup: Vec<u8> = Vec::new();
-            dup.extend(super::serialize_as_packet(super::IDENTIFIER, b"keyid").unwrap());
-            dup.extend(super::serialize_as_packet(super::CID, b"third-party-id").unwrap());
-            dup.extend(super::serialize_as_packet(super::VID, b"vid-bytes").unwrap());
-            dup.extend(super::serialize_as_packet(super::CL, b"http://auth/").unwrap());
-            dup.extend(super::serialize_as_packet(tag, b"second-copy").unwrap());
-            dup.extend(super::serialize_as_packet(super::SIGNATURE, &[7u8; 32]).unwrap());
-            let err = super::deserialize(&dup).unwrap_err();
-            assert!(err.to_string().contains("duplicate"), "{}", err);
-        }
+        let mutated = |at: usize, byte: u8| {
+            let mut token = binary.clone();
+            token[at] = byte;
+            super::deserialize(&token).unwrap_err().to_string()
+        };
+        // `from_str_radix` accepted a sign...
+        assert!(mutated(identifier_at, b'+').contains("lowercase hex"));
+        // ...and uppercase digits
+        assert!(mutated(signature_at + 3, b'F').contains("lowercase hex"));
+        // the byte ending a packet was dropped whatever it was
+        assert!(mutated(signature_at - 1, b'X').contains("newline"));
     }
 
     #[test]
