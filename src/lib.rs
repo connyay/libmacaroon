@@ -494,6 +494,10 @@ impl Macaroon {
     ///
     /// For V2JSON tokens, the token must begin with the `{` character with no preceeding whitespace.
     ///
+    /// Parsing takes memory proportional to the token and stops at the
+    /// [`MAX_CAVEATS`] and [`MAX_FIELD_SIZE_BYTES`] caps, but nothing caps the
+    /// token itself: bound the size of untrusted input before calling this.
+    ///
     /// ## Usage
     ///
     /// ```rust
