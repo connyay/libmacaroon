@@ -25,6 +25,20 @@ authentication bypass.
   vectors still parse. The parser also reads one packet at a time
   instead of splitting the whole token first, which allocated ~8x the
   token's size before `MAX_CAVEATS` applied.
+- **`Verifier::verify` authenticates before it evaluates caveats.** It
+  used to check each first-party predicate while recomputing the
+  signature chain, and compare signatures only at the end. With a
+  forged token, the error (`CaveatNotSatisfied` or `InvalidSignature`)
+  told an unauthenticated caller whether a predicate would be accepted,
+  and `satisfy_general` closures ran on attacker-chosen bytes. Now the
+  signatures of the macaroon and of every discharge are checked first,
+  and predicates are evaluated only once all of them hold. A forged
+  token fails with `InvalidSignature` (it used to get
+  `CaveatNotSatisfied`, or `CryptoError` for a forged third-party
+  caveat), and unused discharges are reported before unsatisfied
+  caveats. Whether a signature should be bound is now decided by the
+  macaroon's position in the tree, as in libmacaroons, instead of by a
+  comparison that only an HMAC collision could have tripped.
 
 ### Dependencies
 
