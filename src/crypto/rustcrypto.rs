@@ -24,7 +24,7 @@ impl RustCryptoBackend {
         T: AsRef<[u8; 32]> + ?Sized,
         U: AsRef<[u8]> + ?Sized,
     {
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(key.as_ref())
+        let mut mac = <HmacSha256 as hmac::KeyInit>::new_from_slice(key.as_ref())
             .expect("HMAC can take key of any size");
         mac.update(text.as_ref());
         let result = mac.finalize().into_bytes();
@@ -41,7 +41,7 @@ impl RustCryptoBackend {
     {
         let tmp1 = Self::hmac(key, text1);
         let tmp2 = Self::hmac(key, text2);
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(key.as_ref())
+        let mut mac = <HmacSha256 as hmac::KeyInit>::new_from_slice(key.as_ref())
             .expect("HMAC can take key of any size");
         mac.update(tmp1.as_ref());
         mac.update(tmp2.as_ref());
