@@ -1,5 +1,40 @@
 # libmacaroon Change Log
 
+## Unreleased
+
+### Dependencies
+
+Security-sensitive dependencies (crypto, RNG, and token parsing) moved
+to their latest releases. `cargo audit` was clean before and after;
+this keeps them on maintained release lines rather than fixing a known
+advisory. MSRV stays at 1.85.
+
+- **`hmac` bumped from 0.12 to 0.13 and `sha2` from 0.10 to 0.11**
+  (the RustCrypto `digest` 0.11 generation). Internal only: no
+  RustCrypto types appear in the public API, and signatures are
+  unchanged (the libmacaroons compatibility vectors still pass).
+  `sha2`'s default features are off, which keeps `const-oid` out of
+  the dependency tree.
+- **`base64` bumped from 0.22 to 0.23**, with its new default-on
+  `simd-unsafe` feature left off. libmacaroon only uses the scalar
+  engines, and without the feature base64 builds under
+  `forbid(unsafe_code)` as 0.22 always did (unless another crate in
+  the build turns it on). Decoding accepts and rejects exactly the
+  same inputs as before. **Breaking:** `MacaroonError`'s `From<base64::DecodeError>` impl now
+  takes base64 0.23's `DecodeError`, so code converting a 0.22 error
+  with `?` must update its own `base64`. The `DeserializationError`
+  text for base64 with non-zero trailing bits is also worded
+  differently.
+- **`zeroize` minimum raised from 1.8 to 1.9.1.** 1.9.0 zeroized
+  through an `optimization_barrier` whose non-asm fallback, the path
+  taken on wasm32, could read uninitialized memory. 1.9.1 fixes it.
+- `crypto_secretbox` stays at 0.1.1, its latest stable release. 0.2 is
+  only available as a pre-release pinned to release candidates of its
+  primitives.
+- `Cargo.lock` refreshed for the rest of the shipped dependency graph,
+  including `serde`/`serde_json` (V2JSON parsing) and `getrandom`'s
+  platform backends (`libc`, `js-sys`/`wasm-bindgen`).
+
 ## Version 0.3.0 - 2026-07-26 (libmacaroon)
 
 ### Dependencies and toolchain
