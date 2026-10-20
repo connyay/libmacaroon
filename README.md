@@ -29,7 +29,7 @@ What *has* been done:
 
 - Pure-Rust crypto stack: HMAC-SHA256 via the RustCrypto `hmac`/`sha2`
   crates, XSalsa20-Poly1305 via `crypto_secretbox`. No FFI, no C
-  dependencies, no `unsafe`.
+  dependencies, and no `unsafe` in this crate (`#![forbid(unsafe_code)]`).
 - Constant-time signature comparison (`subtle::ConstantTimeEq`), key
   zeroization on drop (`ZeroizeOnDrop`), redacted `Debug`, no `Deref`
   into key bytes — `MacaroonKey` is hard to accidentally leak.

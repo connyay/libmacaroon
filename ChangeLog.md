@@ -47,6 +47,8 @@ authentication bypass.
   predicate is shown in quotes. Decryption failures and bad V1
   signature lengths, which anyone can trigger with a malformed token,
   log at `debug` instead of `error`. The error is returned either way.
+- **`#![forbid(unsafe_code)]`.** The crate has never used `unsafe`; now
+  the compiler holds it to that.
 
 ### Dependencies
 
