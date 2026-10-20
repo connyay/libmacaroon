@@ -80,6 +80,8 @@
 //! - verification of third-party caveats using discharge macaroons (including ones that themselves have embedded third-party caveats)
 //! - serialization and deserialization of caveats via version 1, 2 or 2J serialization formats (fully compatible with libmacaroons)
 
+#![forbid(unsafe_code)]
+
 use base64::{
     Engine as _, alphabet,
     engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
@@ -491,6 +493,10 @@ impl Macaroon {
     /// encoding, with or without padding.
     ///
     /// For V2JSON tokens, the token must begin with the `{` character with no preceeding whitespace.
+    ///
+    /// Parsing takes memory proportional to the token and stops at the
+    /// [`MAX_CAVEATS`] and [`MAX_FIELD_SIZE_BYTES`] caps, but nothing caps the
+    /// token itself: bound the size of untrusted input before calling this.
     ///
     /// ## Usage
     ///

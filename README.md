@@ -29,13 +29,16 @@ What *has* been done:
 
 - Pure-Rust crypto stack: HMAC-SHA256 via the RustCrypto `hmac`/`sha2`
   crates, XSalsa20-Poly1305 via `crypto_secretbox`. No FFI, no C
-  dependencies, no `unsafe`.
+  dependencies, and no `unsafe` in this crate (`#![forbid(unsafe_code)]`).
 - Constant-time signature comparison (`subtle::ConstantTimeEq`), key
   zeroization on drop (`ZeroizeOnDrop`), redacted `Debug`, no `Deref`
   into key bytes — `MacaroonKey` is hard to accidentally leak.
 - DoS caps on every input dimension: caveat count (`MAX_CAVEATS = 1000`),
   field size (`MAX_FIELD_SIZE_BYTES = 65535`), verification recursion
-  depth (32). Applied symmetrically on construction and deserialization.
+  depth (32). Applied symmetrically on construction and deserialization,
+  and enforced while parsing, so parse memory stays proportional to the
+  token. Capping the size of untrusted tokens is up to the caller, e.g.
+  at the HTTP layer.
 - Fallible RNG path: WASM environments without
   `crypto.getRandomValues` surface `MacaroonError::RngError` instead of
   aborting the module.

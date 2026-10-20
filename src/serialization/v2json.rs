@@ -3,12 +3,14 @@ use crate::caveat::CaveatBuilder;
 use crate::error::MacaroonError;
 use crate::serialization::macaroon_builder::MacaroonBuilder;
 use crate::{
-    ByteString, Macaroon, Result, URL_SAFE_NO_PAD, base64_decode_flexible, check_field_size,
+    ByteString, MAX_CAVEATS, Macaroon, Result, URL_SAFE_NO_PAD, base64_decode_flexible,
+    check_field_size,
 };
 use base64::Engine as _;
-use serde::{Deserialize, Serialize};
+use serde::de::{IgnoredAny, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json;
-use std::str;
+use std::{fmt, str};
 
 // `deny_unknown_fields` keeps V2JSON as canonical as the binary formats:
 // without it, arbitrary (and unbounded — the field caps only apply to
@@ -33,9 +35,49 @@ struct Serialization {
     i64: Option<ByteString>,
     l: Option<String>,
     l64: Option<String>,
+    #[serde(deserialize_with = "deserialize_caveats")]
     c: Vec<Caveat>,
     s: Option<Vec<u8>>,
     s64: Option<String>,
+}
+
+/// Collects the `c` array, keeping at most one caveat past `MAX_CAVEATS`.
+///
+/// Collecting the whole array before checking the cap let a token of empty
+/// caveats (`{}` is 3 bytes of JSON, a parsed `Caveat` is 144) allocate ~50x
+/// its own size. The one extra caveat makes `from_json` fail with
+/// `TooManyCaveats`, as the binary parsers do, and the rest of the array is
+/// skipped without allocating.
+fn deserialize_caveats<'de, D>(deserializer: D) -> std::result::Result<Vec<Caveat>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct CaveatsVisitor;
+
+    impl<'de> Visitor<'de> for CaveatsVisitor {
+        type Value = Vec<Caveat>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("an array of caveats")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut caveats = Vec::new();
+            while caveats.len() <= MAX_CAVEATS {
+                match seq.next_element()? {
+                    Some(caveat) => caveats.push(caveat),
+                    None => return Ok(caveats),
+                }
+            }
+            while seq.next_element::<IgnoredAny>()?.is_some() {}
+            Ok(caveats)
+        }
+    }
+
+    deserializer.deserialize_seq(CaveatsVisitor)
 }
 
 impl Serialization {
@@ -352,6 +394,44 @@ mod tests {
             sig64
         );
         assert!(Macaroon::deserialize(&ok_id).is_ok());
+    }
+
+    #[test]
+    fn test_caveat_cap_applies_while_parsing() {
+        // The cap must bound what gets parsed, not just what gets kept;
+        // `tests/parse_memory.rs` measures the allocation.
+        let token = |caveats: Vec<&str>| {
+            format!(
+                r#"{{"v":2,"i":"keyid","c":[{}],"s64":"S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw"}}"#,
+                caveats.join(",")
+            )
+        };
+        let caveat = r#"{"i":"a = b"}"#;
+        let max = crate::MAX_CAVEATS;
+
+        assert!(Macaroon::deserialize(token(vec![caveat; max])).is_ok());
+        assert!(matches!(
+            Macaroon::deserialize(token(vec![caveat; max + 1])).unwrap_err(),
+            crate::MacaroonError::TooManyCaveats
+        ));
+        // Past the cap, elements are skipped rather than parsed as caveats:
+        // one that would fail `deny_unknown_fields` goes unnoticed.
+        let mut flood = vec![caveat; max + 1];
+        flood.push(r#"{"zzz":"junk"}"#);
+        assert!(matches!(
+            Macaroon::deserialize(token(flood)).unwrap_err(),
+            crate::MacaroonError::TooManyCaveats
+        ));
+    }
+
+    #[test]
+    fn test_unknown_field_is_escaped_in_error() {
+        // serde names an unknown key verbatim; here it carries a newline and
+        // an ANSI escape that would otherwise land in a log line as is.
+        let token = r#"{"v":2,"i":"keyid","c":[],"s64":"S-lnzR6gxrJrr2pKlO6bBbFYhtoLqF6MQqk8jQ4SXvw","x\nINFO forged \u001b[0m":1}"#;
+        let message = Macaroon::deserialize(token).unwrap_err().to_string();
+        assert!(!message.contains(['\n', '\u{1b}']), "{:?}", message);
+        assert!(message.contains(r"x\nINFO forged \u{1b}[0m"), "{}", message);
     }
 
     #[test]

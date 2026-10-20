@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+### Security hardening
+
+Fixes from a pre-release security review. None of them is an
+authentication bypass.
+
+- **V2JSON enforces `MAX_CAVEATS` while parsing.** The `c` array was
+  collected in full before the cap was checked, so a token of empty
+  caveats (`[{},{},...]`) allocated about 50 times its own size: a 3 MB
+  token peaked at 151 MB of heap. Parsing now stops collecting one
+  caveat past the cap and skips the rest of the array without
+  allocating. The error is still `TooManyCaveats`.
+- **V1 parsing is strict and single-pass.** 0.3.0 set out to give each
+  macaroon one V1 encoding, but the parser still accepted many: any byte
+  in place of a packet's closing newline, a `+` or uppercase digits in
+  the hex size, packets in any order, and `vid` / `cl` packets with no
+  `cid`, which were dropped unread. A token could carry ~128 KB of such
+  payload and still verify. Packets must now come exactly as
+  `location? identifier (cid (vid cl)?)* signature`, with the size in
+  four lowercase hex digits and a newline at the end. libmacaroons,
+  pymacaroons, and this crate all write that form, and their test
+  vectors still parse. The parser also reads one packet at a time
+  instead of splitting the whole token first, which allocated ~8x the
+  token's size before `MAX_CAVEATS` applied.
+- **`Verifier::verify` authenticates before it evaluates caveats.** It
+  used to check each first-party predicate while recomputing the
+  signature chain, and compare signatures only at the end. With a
+  forged token, the error (`CaveatNotSatisfied` or `InvalidSignature`)
+  told an unauthenticated caller whether a predicate would be accepted,
+  and `satisfy_general` closures ran on attacker-chosen bytes. Now the
+  signatures of the macaroon and of every discharge are checked first,
+  and predicates are evaluated only once all of them hold. A forged
+  token fails with `InvalidSignature` (it used to get
+  `CaveatNotSatisfied`, or `CryptoError` for a forged third-party
+  caveat), and unused discharges are reported before unsatisfied
+  caveats. Whether a signature should be bound is now decided by the
+  macaroon's position in the tree, as in libmacaroons, instead of by a
+  comparison that only an HMAC collision could have tripped.
+- **Token text in error messages is escaped, and malformed input is no
+  longer logged at `error`.** `CaveatNotSatisfied` quoted the predicate
+  raw and serde's unknown-field error quoted the JSON key raw, so a
+  token could put newlines or terminal escapes into whatever logged the
+  error. Both are now escaped as `{:?}` would escape them, and the
+  predicate is shown in quotes. Decryption failures and bad V1
+  signature lengths, which anyone can trigger with a malformed token,
+  log at `debug` instead of `error`. The error is returned either way.
+- **`#![forbid(unsafe_code)]`.** The crate has never used `unsafe`; now
+  the compiler holds it to that.
+
 ### Dependencies
 
 Security-sensitive dependencies (crypto, RNG, and token parsing) moved
