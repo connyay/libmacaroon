@@ -11,7 +11,7 @@ use crypto_secretbox::{
     aead::{Aead, KeyInit},
 };
 use hmac::{Hmac, Mac};
-use log::error;
+use log::debug;
 use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -87,7 +87,7 @@ impl RustCryptoBackend {
         const TAG_SIZE: usize = 16;
 
         if raw_data.len() < NONCE_SIZE + TAG_SIZE {
-            error!(
+            debug!(
                 "crypto::decrypt: Encrypted data too short (len={})",
                 raw_data.len()
             );
@@ -112,7 +112,7 @@ impl RustCryptoBackend {
                 Ok(MacaroonKey::from(key_bytes))
             }
             Err(_) => {
-                error!(
+                debug!(
                     "crypto::decrypt: Decryption failed (data len={})",
                     raw_data.len()
                 );

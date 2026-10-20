@@ -3,7 +3,7 @@ use crate::error::MacaroonError;
 use crate::serialization::macaroon_builder::MacaroonBuilder;
 use crate::{ByteString, Macaroon, Result, URL_SAFE, check_field_size};
 use base64::Engine as _;
-use log::error;
+use log::debug;
 use std::str;
 
 // Version 1 fields
@@ -193,7 +193,7 @@ pub fn deserialize(data: &[u8]) -> Result<Macaroon> {
                     builder.add_caveat(first_party.build()?)?;
                 }
                 if value.len() != 32 {
-                    error!(
+                    debug!(
                         "deserialize_v1: Deserialization error - signature length is {}",
                         value.len()
                     );
