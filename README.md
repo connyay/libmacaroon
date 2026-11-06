@@ -102,7 +102,7 @@ the above process.
   formats are needed:
 
   ```toml
-  libmacaroon = { version = "0.2", default-features = false }
+  libmacaroon = { version = "0.4", default-features = false }
   ```
 
   With the feature off, `Format::V2JSON` is not compiled and
@@ -250,7 +250,7 @@ This crate now supports WebAssembly! Use the `wasm` feature to enable WASM compa
 
 ```toml
 [dependencies]
-libmacaroon = { version = "0.1", default-features = false, features = ["wasm"] }
+libmacaroon = { version = "0.4", default-features = false, features = ["wasm"] }
 ```
 
 The `wasm` feature enables browser-compatible random number generation. The
@@ -278,10 +278,12 @@ same backend works for both native and WASM targets.
 ## Minimum Supported Rust Version
 
 This crate targets Rust Language 2024 Edition and builds on stable Rust
-1.85 (Feb 2025) and later — the floor set by Edition 2024, which
-`getrandom` 0.4 also requires. The library build (`cargo build`) is
-the contract; `cargo test` pulls in dev-dep transitives that require
-newer editions and isn't part of the MSRV guarantee.
+1.87 (May 2025) and later. Edition 2024 and `getrandom` 0.4 need 1.85;
+1.87 is what `ctutils` 0.4.4 needs, the first release with the fix for
+RUSTSEC-2026-0385 (it comes in through `digest`). The library build
+(`cargo build`) is the contract; `cargo test` pulls in dev-dep
+transitives that require newer editions and isn't part of the MSRV
+guarantee.
 
 MSRV bumps are not considered breaking for 0.x, but we only bump when
 needed, and only to land bug fixes or to keep transitive deps on

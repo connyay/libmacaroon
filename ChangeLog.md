@@ -1,6 +1,19 @@
 # libmacaroon Change Log
 
-## Unreleased
+## Version 0.4.0 - 2026-11-06 (libmacaroon)
+
+This release needs Rust 1.87 or later. Code that only creates,
+serializes, and verifies well-formed tokens needs no changes. When
+upgrading, check for code that:
+
+- converts a `base64` 0.22 `DecodeError` into `MacaroonError` with `?`
+  (the impl now takes base64 0.23's error);
+- tells forged tokens apart by error variant: they now fail with
+  `InvalidSignature`, not `CaveatNotSatisfied` or `CryptoError`;
+- produces V1 tokens by hand in a non-canonical form, which no longer
+  parse;
+- matches on the text of `CaveatNotSatisfied` or `DeserializationError`,
+  which is now escaped (and quotes the predicate).
 
 ### Security hardening
 
@@ -53,10 +66,18 @@ authentication bypass.
 ### Dependencies
 
 Security-sensitive dependencies (crypto, RNG, and token parsing) moved
-to their latest releases. `cargo audit` was clean before and after;
-this keeps them on maintained release lines rather than fixing a known
-advisory. MSRV stays at 1.85.
+to their latest releases. Apart from `ctutils` below, this keeps them
+on maintained release lines rather than fixing a known advisory.
 
+- **MSRV raised from 1.85 to 1.87** so the lockfile can take `ctutils`
+  0.4.8, which fixes RUSTSEC-2026-0385 (published 2026-10-23): before
+  0.4.4, `ctutils` could branch on secret values when building masks,
+  and in `u128` comparisons on 32-bit targets. It comes in through
+  `digest` 0.11 (see the `hmac`/`sha2` bump below), and `digest` uses
+  it only in `Mac::verify*`. libmacaroon compares signatures with
+  `subtle` and never calls those, so it was not exposed. The crate
+  doesn't require the fixed version, so a downstream lockfile may still
+  hold an older `ctutils`; `cargo update -p ctutils` moves it.
 - **`hmac` bumped from 0.12 to 0.13 and `sha2` from 0.10 to 0.11**
   (the RustCrypto `digest` 0.11 generation). Internal only: no
   RustCrypto types appear in the public API, and signatures are
@@ -68,11 +89,11 @@ advisory. MSRV stays at 1.85.
   engines, and without the feature base64 builds under
   `forbid(unsafe_code)` as 0.22 always did (unless another crate in
   the build turns it on). Decoding accepts and rejects exactly the
-  same inputs as before. **Breaking:** `MacaroonError`'s `From<base64::DecodeError>` impl now
-  takes base64 0.23's `DecodeError`, so code converting a 0.22 error
-  with `?` must update its own `base64`. The `DeserializationError`
-  text for base64 with non-zero trailing bits is also worded
-  differently.
+  same inputs as before. **Breaking:** `MacaroonError`'s
+  `From<base64::DecodeError>` impl now takes base64 0.23's
+  `DecodeError`, so code converting a 0.22 error with `?` must update
+  its own `base64`. The `DeserializationError` text for base64 with
+  non-zero trailing bits is also worded differently.
 - **`zeroize` minimum raised from 1.8 to 1.9.1.** 1.9.0 zeroized
   through an `optimization_barrier` whose non-asm fallback, the path
   taken on wasm32, could read uninitialized memory. 1.9.1 fixes it.
@@ -82,6 +103,13 @@ advisory. MSRV stays at 1.85.
 - `Cargo.lock` refreshed for the rest of the shipped dependency graph,
   including `serde`/`serde_json` (V2JSON parsing) and `getrandom`'s
   platform backends (`libc`, `js-sys`/`wasm-bindgen`).
+
+### Documentation
+
+- The README and the `Macaroon::deserialize` docs now say that bounding
+  the size of untrusted tokens is up to the caller. Parsing stops at
+  `MAX_CAVEATS` and `MAX_FIELD_SIZE_BYTES` and takes memory proportional
+  to the token, but nothing in the crate caps the token itself.
 
 ## Version 0.3.0 - 2026-07-26 (libmacaroon)
 
